@@ -4,13 +4,13 @@
   "description": "Fastify backend API for ApiMetrics project",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx watch src/index.ts",
+    "build": "prisma generate && tsc",
+    "dev": "dotenv -e .env.local -- tsx watch src/index.ts",
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio",
-    "db:push": "prisma db push",
+    "db:migrate": "dotenv -e .env.local -- prisma migrate dev",
+    "db:studio": "dotenv -e .env.local -- prisma studio",
+    "db:push": "dotenv -e .env.local -- prisma db push",
     "clean": "rm -rf dist",
     "type-check": "tsc --noEmit"
   },
@@ -23,7 +23,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@apimetrics/shared": "workspace:*",
+    "@apimetrics/shared": "file:../../packages/shared",
+    "@fastify/cors": "^8.5.0",
     "@prisma/client": "^5.8.1",
     "bcrypt": "^5.1.1",
     "fastify": "^4.25.2",
@@ -33,6 +34,7 @@
     "@types/bcrypt": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.10.6",
+    "dotenv-cli": "^11.0.0",
     "prisma": "^5.8.1",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
@@ -41,4 +43,3 @@
     "node": ">=18.0.0"
   }
 }
-

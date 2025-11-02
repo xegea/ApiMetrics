@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  transpilePackages: ['@apimetrics/shared'],
+};
 
 module.exports = nextConfig;
 

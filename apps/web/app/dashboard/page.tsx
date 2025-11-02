@@ -22,10 +22,29 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-red-600">
-          Error loading test results: {error instanceof Error ? error.message : 'Unknown error'}
-        </div>
+      <div className="min-h-screen bg-gray-50">
+        <nav className="bg-white shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between h-16">
+              <div className="flex items-center">
+                <h1 className="text-2xl font-bold text-gray-900">ApiMetrics</h1>
+              </div>
+            </div>
+          </div>
+        </nav>
+        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+          <div className="px-4 py-6 sm:px-0">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+              <h3 className="text-lg font-medium text-red-800 mb-2">Error loading test results</h3>
+              <p className="text-red-600">
+                {error instanceof Error ? error.message : 'Unknown error'}
+              </p>
+              <p className="text-sm text-red-500 mt-4">
+                Make sure the API server is running and check your NEXT_PUBLIC_APIMETRICS_API_URL environment variable.
+              </p>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }

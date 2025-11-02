@@ -23,22 +23,26 @@ interface GetResultsParams {
  * Accept uploaded JSON from CLI
  */
 async function postResults(
-  request: FastifyRequest<{ Body: Buffer }>,
+  request: FastifyRequest<{ Body: PostResultsBody | Buffer }>,
   reply: FastifyReply
 ) {
   try {
+    let result: PostResultsBody;
+
     // Check if content is gzipped
     const contentType = request.headers['content-encoding'];
-    let jsonData: Buffer;
 
     if (contentType === 'gzip') {
-      jsonData = await gunzipAsync(request.body);
+      // Gzipped content comes as Buffer
+      const jsonData = await gunzipAsync(request.body as Buffer);
+      result = JSON.parse(jsonData.toString('utf-8'));
+    } else if (Buffer.isBuffer(request.body)) {
+      // Raw buffer (shouldn't happen with Fastify's default parser)
+      result = JSON.parse(request.body.toString('utf-8'));
     } else {
-      jsonData = request.body;
+      // Already parsed by Fastify
+      result = request.body as PostResultsBody;
     }
-
-    // Parse JSON
-    const result: PostResultsBody = JSON.parse(jsonData.toString('utf-8'));
 
     // Validate required fields
     if (!result.id || typeof result.avgLatency !== 'number' || typeof result.successRate !== 'number') {

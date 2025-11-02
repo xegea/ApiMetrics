@@ -21,7 +21,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@apimetrics/shared": "workspace:*",
+    "@apimetrics/shared": "file:../../packages/shared",
     "axios": "^1.6.5",
     "chalk": "^4.1.2",
     "commander": "^11.1.0",

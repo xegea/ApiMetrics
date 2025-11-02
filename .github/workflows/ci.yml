@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Optional: map to an environment to use environment-scoped secrets (dev/demo/pro)
+    # environment: dev
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps (workspaces)
+        run: npm ci
+
+      - name: Build shared package
+        run: npm run build:shared
+
+      - name: Create API env file (if secrets provided)
+        shell: bash
+        run: |
+          mkdir -p apps/api
+          : "${{ secrets.DATABASE_URL }}" || true
+          : "${{ secrets.DIRECT_URL }}" || true
+          : "${{ secrets.JWT_SECRET }}" || true
+          if [ -n "${{ secrets.DATABASE_URL }}${{ secrets.JWT_SECRET }}" ]; then
+            {
+              echo "DATABASE_URL=${{ secrets.DATABASE_URL }}";
+              [ -n "${{ secrets.DIRECT_URL }}" ] && echo "DIRECT_URL=${{ secrets.DIRECT_URL }}";
+              echo "JWT_SECRET=${{ secrets.JWT_SECRET }}";
+              echo "NODE_ENV=production";
+              echo "HOST=0.0.0.0";
+              echo "PORT=3000";
+            } > apps/api/.env
+          else
+            echo "No API secrets found; skipping apps/api/.env creation";
+          fi
+
+      - name: Create Web env file (if secrets provided)
+        shell: bash
+        run: |
+          mkdir -p apps/web
+          if [ -n "${{ secrets.NEXT_PUBLIC_APIMETRICS_API_URL }}" ]; then
+            echo "NEXT_PUBLIC_APIMETRICS_API_URL=${{ secrets.NEXT_PUBLIC_APIMETRICS_API_URL }}" > apps/web/.env.local
+          else
+            echo "No Web secrets found; skipping apps/web/.env.local creation";
+          fi
+
+      - name: Build API
+        run: npm run build:api
+
+      - name: Build Web
+        run: npm run build:web
