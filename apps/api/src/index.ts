@@ -1,0 +1,33 @@
+import Fastify from 'fastify';
+import { resultsRoutes } from './routes/results';
+import { authRoutes } from './routes/auth';
+
+const server = Fastify({
+  logger: true,
+});
+
+// Register routes
+server.register(resultsRoutes);
+server.register(authRoutes);
+
+// Health check endpoint
+server.get('/health', async (request, reply) => {
+  return { status: 'ok', timestamp: new Date().toISOString() };
+});
+
+// Start server
+const start = async () => {
+  try {
+    const port = parseInt(process.env.PORT || '3000', 10);
+    const host = process.env.HOST || '0.0.0.0';
+
+    await server.listen({ port, host });
+    console.log(`🚀 Server listening on http://${host}:${port}`);
+  } catch (err) {
+    server.log.error(err);
+    process.exit(1);
+  }
+};
+
+start();
+

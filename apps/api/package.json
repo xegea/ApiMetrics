@@ -1,0 +1,44 @@
+{
+  "name": "apimetrics-api",
+  "version": "0.1.0",
+  "description": "Fastify backend API for ApiMetrics project",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:push": "prisma db push",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "apimetrics",
+    "api",
+    "fastify",
+    "load-testing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@apimetrics/shared": "workspace:*",
+    "@prisma/client": "^5.8.1",
+    "bcrypt": "^5.1.1",
+    "fastify": "^4.25.2",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.10.6",
+    "prisma": "^5.8.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+
