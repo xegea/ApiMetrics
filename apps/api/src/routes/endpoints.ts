@@ -56,7 +56,7 @@ async function createEndpoint(
     });
 
     // Create the endpoint
-  const testEndpoint = await prisma.testEndpoint.create({
+  const testEndpoint = await (prisma as any).testEndpoint.create({
       data: {
         tenantId: ensured.tenantId,
         userId: user.userId,
@@ -102,7 +102,7 @@ async function getEndpoints(
     const tenantId = ensured.tenantId;
 
     // Get all endpoints for the tenant
-  const endpoints = await prisma.testEndpoint.findMany({
+  const endpoints = await (prisma as any).testEndpoint.findMany({
       where: {
         tenantId,
       },
@@ -159,7 +159,7 @@ async function deleteEndpoint(
     }
 
     // Check if endpoint exists and belongs to user's tenant
-  const endpoint = await prisma.testEndpoint.findUnique({
+  const endpoint = await (prisma as any).testEndpoint.findUnique({
       where: { id },
     });
 
@@ -168,7 +168,7 @@ async function deleteEndpoint(
     }
 
     // Delete the endpoint
-  await prisma.testEndpoint.delete({
+  await (prisma as any).testEndpoint.delete({
       where: { id },
     });
 
@@ -185,5 +185,5 @@ export async function endpointsRoutes(fastify: FastifyInstance) {
   fastify.delete<{ Params: DeleteEndpointParams }>('/endpoints/:id', { preHandler: verifyToken }, deleteEndpoint);
   
   // Authenticated route - returns endpoints for the caller's tenant
-  fastify.get('/endpoints', { preHandler: verifyToken }, getEndpoints);
+  fastify.get<{ Querystring: GetEndpointsQuery }>('/endpoints', { preHandler: verifyToken }, getEndpoints);
 }
