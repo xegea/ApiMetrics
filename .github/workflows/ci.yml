@@ -53,8 +53,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p apps/web
-          if [ -n "${{ secrets.NEXT_PUBLIC_APIMETRICS_API_URL }}" ]; then
-            echo "NEXT_PUBLIC_APIMETRICS_API_URL=${{ secrets.NEXT_PUBLIC_APIMETRICS_API_URL }}" > apps/web/.env.local
+          if [ -n "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" ]; then
+            {
+              echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}";
+              echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}";
+              echo "NEXT_PUBLIC_APIMETRICS_API_URL=${{ secrets.NEXT_PUBLIC_APIMETRICS_API_URL }}";
+            } > apps/web/.env.local
           else
             echo "No Web secrets found; skipping apps/web/.env.local creation";
           fi

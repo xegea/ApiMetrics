@@ -76,7 +76,7 @@ async function login(
 }
 
 /**
- * Helper function to verify JWT token
+ * Helper function to verify JWT token from Supabase Auth
  * Can be used as a preHandler hook for protected routes
  */
 export async function verifyToken(
@@ -97,10 +97,15 @@ export async function verifyToken(
       return reply.code(500).send({ error: 'Server configuration error' });
     }
 
-    const decoded = jwt.verify(token, jwtSecret) as { userId: string; email: string };
+    // Verify token with Supabase JWT secret
+    const decoded = jwt.verify(token, jwtSecret) as any;
+
+    // Supabase tokens have 'sub' (subject) as the user ID
+    const userId = decoded.sub || decoded.userId;
+    const email = decoded.email;
 
     // Attach user info to request for use in route handlers
-    (request as any).user = decoded;
+    (request as any).user = { userId, email };
 
     return;
   } catch (error) {
