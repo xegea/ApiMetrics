@@ -13,13 +13,11 @@
     "build:shared": "npm run build --workspace=packages/shared",
     "build:web": "npm run build --workspace=apps/web",
     "build:api": "npm run build --workspace=apps/api",
-    "build:cli": "npm run build --workspace=apps/cli",
-    "sample:post": "node scripts/post-sample-result.mjs",
-    "sample:post:gzip": "node scripts/post-sample-result.mjs --gzip",
-    "seed": "node scripts/seed-sample-data.mjs"
+    "build:cli": "npm run build --workspace=apps/cli"
   },
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.6"
   }
 }
 
