@@ -14,15 +14,15 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   {
     label: 'Home',
-    href: '/dashboard',
+    href: '/',
     icon: '🏠',
   },
   {
     label: 'Test Endpoints',
     icon: '🔧',
     children: [
-      { label: 'New Endpoint', href: '/test-endpoints' },
-      { label: 'My Endpoints', href: '/list-endpoints' },
+      { label: 'Endpoints List', href: '/endpoints' },
+      { label: 'Load Tests', href: '/load-tests' },
     ],
   },
   {
@@ -56,7 +56,7 @@ export function Sidebar() {
     <div className="w-64 bg-gray-900 text-white min-h-screen p-4 flex flex-col">
       {/* Logo/Title */}
       <div className="mb-8 pb-4 border-b border-gray-700">
-        <Link href="/dashboard" className="flex items-center gap-2 group">
+        <Link href="/" className="flex items-center gap-2 group">
           <span className="text-2xl">⚡</span>
           <h1 className="text-xl font-bold group-hover:text-blue-400 transition">
             ApiMetrics
