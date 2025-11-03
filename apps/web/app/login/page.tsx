@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { login } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -17,17 +19,18 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await login(email, password);
+      const { error } = await signIn(email, password);
       
-      // Store token and user email in localStorage
-      localStorage.setItem('auth_token', response.token);
-      localStorage.setItem('user_email', response.user.email);
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
       
       // Redirect to dashboard
       router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
-    } finally {
       setLoading(false);
     }
   };
@@ -92,6 +95,15 @@ export default function LoginPage() {
             >
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
+          </div>
+
+          <div className="text-center">
+            <p className="text-sm text-gray-600">
+              Don't have an account?{' '}
+              <Link href="/dashboard" className="font-medium text-indigo-600 hover:text-indigo-500">
+                Sign up
+              </Link>
+            </p>
           </div>
         </form>
       </div>

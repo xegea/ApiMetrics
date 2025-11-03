@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
 
 interface SignupModalProps {
   isOpen: boolean;
@@ -10,29 +11,39 @@ interface SignupModalProps {
 
 export function SignupModal({ isOpen, onClose }: SignupModalProps) {
   const router = useRouter();
+  const { signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement actual signup logic with API
-    // For now, simulate successful signup
-    
-    // Store mock token and user email
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', 'mock-jwt-token-' + Date.now());
-      localStorage.setItem('user_email', email);
+    setError('');
+    setLoading(true);
+
+    try {
+      // Extract tenantId from email domain
+      const tenantId = email.split('@')[1] || 'default';
+      
+      const { error } = await signUp(email, password, tenantId);
+      
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      alert('Account created successfully! Please check your email to verify your account.');
+      onClose();
+      router.push('/login');
+    } catch (err) {
+      setError('An unexpected error occurred');
+      setLoading(false);
     }
-    
-    alert('Account created successfully! Redirecting to dashboard...');
-    onClose();
-    
-    // Redirect to dashboard and trigger page reload to update TopBar
-    router.push('/dashboard');
-    window.location.reload();
   };
 
   const handleGoogleSignup = () => {
@@ -147,6 +158,13 @@ export function SignupModal({ isOpen, onClose }: SignupModalProps) {
           </div>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
         {/* Email/Password Form */}
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
@@ -159,7 +177,8 @@ export function SignupModal({ isOpen, onClose }: SignupModalProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               placeholder="you@example.com"
             />
           </div>
@@ -175,9 +194,10 @@ export function SignupModal({ isOpen, onClose }: SignupModalProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={8}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
-                placeholder="8+ characters (at least 1 letter & 1 number)"
+                minLength={6}
+                disabled={loading}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10 disabled:bg-gray-100"
+                placeholder="At least 6 characters"
               />
               <button
                 type="button"
@@ -212,15 +232,16 @@ export function SignupModal({ isOpen, onClose }: SignupModalProps) {
               </button>
             </div>
             <p className="mt-1 text-xs text-gray-500">
-              At least 8 characters with 1 letter and 1 number
+              At least 6 characters
             </p>
           </div>
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            Sign up
+            {loading ? 'Creating account...' : 'Sign up'}
           </button>
         </form>
 

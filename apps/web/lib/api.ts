@@ -1,20 +1,19 @@
 import { TestResult } from '@apimetrics/shared';
+import { supabase } from './supabase';
 
 const API_URL = process.env.NEXT_PUBLIC_APIMETRICS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
-function getAuthToken(): string | null {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('auth_token');
-  }
-  return null;
+async function getAuthToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || null;
 }
 
-function getHeaders(): HeadersInit {
+async function getHeaders(): Promise<HeadersInit> {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
 
-  const token = getAuthToken();
+  const token = await getAuthToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -24,10 +23,11 @@ function getHeaders(): HeadersInit {
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   try {
+    const authHeaders = await getHeaders();
     const response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
       headers: {
-        ...getHeaders(),
+        ...authHeaders,
         ...options?.headers,
       },
     });

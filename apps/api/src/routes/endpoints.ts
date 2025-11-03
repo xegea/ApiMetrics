@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply, RouteGenericInterface, RouteHandlerMethod } from 'fastify';
 import { prisma } from '../services/db';
 import { verifyToken } from './auth';
 
@@ -22,10 +22,11 @@ interface DeleteEndpointParams {
  * POST /endpoints
  * Create a new test endpoint
  */
-async function createEndpoint(
-  request: FastifyRequest<{ Body: CreateEndpointBody }>,
-  reply: FastifyReply
-) {
+interface CreateEndpointRoute extends RouteGenericInterface {
+  Body: CreateEndpointBody;
+}
+
+const createEndpoint: RouteHandlerMethod<CreateEndpointRoute> = async (request, reply) => {
   try {
     // Get user from token (set by verifyToken middleware)
     const user = (request as any).user;
@@ -134,10 +135,11 @@ async function getEndpoints(
  * DELETE /endpoints/:id
  * Delete a test endpoint
  */
-async function deleteEndpoint(
-  request: FastifyRequest<{ Params: DeleteEndpointParams }>,
-  reply: FastifyReply
-) {
+interface DeleteEndpointRoute extends RouteGenericInterface {
+  Params: DeleteEndpointParams;
+}
+
+const deleteEndpoint: RouteHandlerMethod<DeleteEndpointRoute> = async (request, reply) => {
   try {
     const user = (request as any).user;
     const { id } = request.params;
@@ -169,8 +171,8 @@ async function deleteEndpoint(
 
 export async function endpointsRoutes(fastify: FastifyInstance) {
   // Protected routes (require authentication)
-  fastify.post('/endpoints', { preHandler: verifyToken }, createEndpoint);
-  fastify.delete('/endpoints/:id', { preHandler: verifyToken }, deleteEndpoint);
+  fastify.post<CreateEndpointRoute>('/endpoints', { preHandler: verifyToken }, createEndpoint);
+  fastify.delete<DeleteEndpointRoute>('/endpoints/:id', { preHandler: verifyToken }, deleteEndpoint);
   
   // Public route (can be called without auth for now)
   fastify.get('/endpoints', getEndpoints);

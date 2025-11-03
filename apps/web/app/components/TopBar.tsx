@@ -1,33 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { SignupModal } from './SignupModal';
+import { useAuth } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
 
 export function TopBar() {
   const [showSignupModal, setShowSignupModal] = useState(false);
-  const [user, setUser] = useState<{ email: string } | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const { user, signOut } = useAuth();
+  const router = useRouter();
 
-  // Check for logged in user (from localStorage)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('auth_token');
-      const userEmail = localStorage.getItem('user_email');
-      
-      if (token && userEmail) {
-        setUser({ email: userEmail });
-      }
-    }
-  }, []);
-
-  const handleLogout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('user_email');
-      setUser(null);
-      setShowUserMenu(false);
-    }
+  const handleLogout = async () => {
+    await signOut();
+    setShowUserMenu(false);
+    router.push('/login');
   };
 
   // Get username from email (part before @)
@@ -61,7 +49,7 @@ export function TopBar() {
                   />
                 </svg>
               </div>
-              <span className="font-medium text-gray-700">{getUsername(user.email)}</span>
+              <span className="font-medium text-gray-700">{getUsername(user.email!)}</span>
               <svg
                 className={`w-4 h-4 text-gray-500 transition-transform ${
                   showUserMenu ? 'rotate-180' : ''

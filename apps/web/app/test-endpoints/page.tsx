@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { createTestEndpoint, getTestEndpoints, TestEndpoint } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 
 export default function TestEndpointsPage() {
+  const { user } = useAuth();
   const [tenantId, setTenantId] = useState('');
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
   const [endpoints, setEndpoints] = useState<TestEndpoint[]>([]);
@@ -29,19 +31,16 @@ export default function TestEndpointsPage() {
     }
   };
 
-  // Load tenantId from localStorage on mount
+  // Load tenantId from user metadata on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const userEmail = localStorage.getItem('user_email');
-      if (userEmail) {
-        // Use email domain as default tenantId
-        const domain = userEmail.split('@')[1] || 'default';
-        setTenantId(domain);
-        setCurrentTenantId(domain);
-        listTestEndpoints(domain);
-      }
+    if (user?.email) {
+      // Use email domain as default tenantId
+      const domain = user.email.split('@')[1] || 'default';
+      setTenantId(domain);
+      setCurrentTenantId(domain);
+      listTestEndpoints(domain);
     }
-  }, []);
+  }, [user]);
 
   const applyTenantId = async () => {
     if (!tenantId) {
