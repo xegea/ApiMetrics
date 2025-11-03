@@ -1,15 +1,24 @@
+
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { getTestResults } from '@/lib/api';
+import { getTestResults, seedResults } from '@/lib/api';
 import { TestResult } from '@apimetrics/shared';
 import { formatTimestamp, formatPercentage } from '@apimetrics/shared';
 
 export default function DashboardPage() {
+  const queryClient = useQueryClient();
   const { data: results, isLoading, error } = useQuery<TestResult[]>({
     queryKey: ['testResults'],
     queryFn: getTestResults,
+  });
+
+  const seedMutation = useMutation({
+    mutationFn: async (count: number) => seedResults({ count, project: 'demo' }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['testResults'] });
+    },
   });
 
   if (isLoading) {
@@ -72,11 +81,28 @@ export default function DashboardPage() {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <h2 className="text-3xl font-bold text-gray-900 mb-6">Test Results</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-3xl font-bold text-gray-900">Test Results</h2>
+            <button
+              onClick={() => seedMutation.mutate(25)}
+              disabled={seedMutation.isPending}
+              className="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+              title="Generate 25 demo results for your tenant"
+            >
+              {seedMutation.isPending ? 'Seeding…' : 'Seed demo data'}
+            </button>
+          </div>
 
           {!results || results.length === 0 ? (
-            <div className="bg-white shadow rounded-lg p-6 text-center text-gray-500">
-              No test results found. Run a load test to see results here.
+            <div className="bg-white shadow rounded-lg p-6 text-center text-gray-700">
+              <p className="mb-4">No test results yet.</p>
+              <button
+                onClick={() => seedMutation.mutate(25)}
+                disabled={seedMutation.isPending}
+                className="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {seedMutation.isPending ? 'Seeding…' : 'Generate 25 demo results'}
+              </button>
             </div>
           ) : (
             <div className="bg-white shadow overflow-hidden sm:rounded-md">

@@ -82,18 +82,18 @@ export function TopBar() {
                   Dashboard
                 </Link>
                 <Link
-                  href="/test-endpoints"
+                  href="/load-tests"
                   className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   onClick={() => setShowUserMenu(false)}
                 >
-                  Test Endpoints
+                  Load Tests
                 </Link>
                 <Link
-                  href="/list-endpoints"
+                  href="/endpoints"
                   className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   onClick={() => setShowUserMenu(false)}
                 >
-                  My Endpoints
+                  Endpoints
                 </Link>
                 <hr className="my-2 border-gray-200" />
                 <button

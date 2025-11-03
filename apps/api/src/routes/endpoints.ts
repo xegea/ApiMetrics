@@ -1,9 +1,11 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../services/db';
+import { ensureUserAndTenant } from '../services/tenancy';
 import { verifyToken } from './auth';
 
 interface CreateEndpointBody {
-  tenantId: string;
+  // tenantId is ignored by the server; we derive it from the authenticated user
+  tenantId?: string;
   endpoint: string;
   httpMethod: string;
   requestBody?: string;
@@ -34,10 +36,10 @@ async function createEndpoint(
       return reply.code(401).send({ error: 'Unauthorized' });
     }
 
-    const { tenantId, endpoint, httpMethod, requestBody, headers } = request.body;
+  const { endpoint, httpMethod, requestBody, headers } = request.body;
 
     // Validate required fields
-    if (!tenantId || !endpoint || !httpMethod) {
+    if (!endpoint || !httpMethod) {
       return reply.code(400).send({ error: 'Missing required fields' });
     }
 
@@ -47,23 +49,16 @@ async function createEndpoint(
       return reply.code(400).send({ error: 'Invalid HTTP method' });
     }
 
-    // Ensure a User record exists for this Supabase user (FK constraint)
-    // Supabase provides the UID in `sub` which we mapped to user.userId in verifyToken
-    await prisma.user.upsert({
-      where: { id: user.userId },
-      update: { email: user.email ?? undefined },
-      create: {
-        id: user.userId,
-        email: user.email ?? `unknown+${user.userId}@example.com`,
-        // Placeholder password; not used with Supabase Auth
-        password: 'supabase-user',
-      },
+    // Ensure a User and Tenant record exist for this Supabase user (FK constraints)
+    const ensured = await ensureUserAndTenant({
+      userId: user.userId,
+      email: user.email ?? `unknown+${user.userId}@example.com`,
     });
 
     // Create the endpoint
   const testEndpoint = await prisma.testEndpoint.create({
       data: {
-        tenantId,
+        tenantId: ensured.tenantId,
         userId: user.userId,
         endpoint,
         httpMethod: httpMethod.toUpperCase(),
@@ -98,11 +93,13 @@ async function getEndpoints(
   reply: FastifyReply
 ) {
   try {
-    const { tenantId } = request.query;
-
-    if (!tenantId) {
-      return reply.code(400).send({ error: 'tenantId query parameter is required' });
-    }
+    // Use the authenticated user's tenant by default
+    const user = (request as any).user;
+    const ensured = await ensureUserAndTenant({
+      userId: user?.userId,
+      email: user?.email ?? 'unknown@example.com',
+    });
+    const tenantId = ensured.tenantId;
 
     // Get all endpoints for the tenant
   const endpoints = await prisma.testEndpoint.findMany({
@@ -187,6 +184,6 @@ export async function endpointsRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: CreateEndpointBody }>('/endpoints', { preHandler: verifyToken }, createEndpoint);
   fastify.delete<{ Params: DeleteEndpointParams }>('/endpoints/:id', { preHandler: verifyToken }, deleteEndpoint);
   
-  // Public route (can be called without auth for now)
-  fastify.get('/endpoints', getEndpoints);
+  // Authenticated route - returns endpoints for the caller's tenant
+  fastify.get('/endpoints', { preHandler: verifyToken }, getEndpoints);
 }

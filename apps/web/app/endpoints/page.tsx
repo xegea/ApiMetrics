@@ -31,33 +31,24 @@ export default function TestEndpointsPage() {
     }
   };
 
-  // Load tenantId from user metadata on mount
+  // On mount, fetch endpoints for the authenticated user's tenant (server derives tenantId)
   useEffect(() => {
-    if (user?.email) {
-      // Use email domain as default tenantId
-      const domain = user.email.split('@')[1] || 'default';
-      setTenantId(domain);
-      setCurrentTenantId(domain);
-      listTestEndpoints(domain);
+    if (user) {
+      listTestEndpoints();
     }
   }, [user]);
 
-  const applyTenantId = async () => {
-    if (!tenantId) {
-      alert('Please enter a Tenant ID');
-      return;
-    }
-    setCurrentTenantId(tenantId);
-    await listTestEndpoints(tenantId);
-  };
+  // Tenant selection is managed by the server via /auth/me and /endpoints; no manual apply needed
 
-  const listTestEndpoints = async (tid: string) => {
+  const listTestEndpoints = async (tid?: string) => {
     setLoading(true);
     try {
       const result = await getTestEndpoints(tid);
       
       setEndpoints(result.endpoints);
       setShowForm(result.endpoints.length === 0);
+      setCurrentTenantId(result.tenantId);
+      setTenantId(result.tenantId);
     } catch (error) {
       alert('Error fetching test endpoints: ' + (error as Error).message);
     } finally {
@@ -66,26 +57,15 @@ export default function TestEndpointsPage() {
   };
 
   const saveTestEndpoint = async () => {
-    let tid = tenantId;
-    if (!tid && currentTenantId) {
-      tid = currentTenantId;
-    }
-
-    if (!tid) {
-      alert('Please enter a Tenant ID');
-      return;
-    }
-
     try {
       await createTestEndpoint({
-        tenantId: tid,
         endpoint,
         httpMethod,
         requestBody: requestBody || undefined,
         headers: headers || undefined,
       });
 
-      await listTestEndpoints(tid);
+      await listTestEndpoints();
       setShowForm(false);
       
       // Reset form
@@ -161,29 +141,7 @@ export default function TestEndpointsPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Tenant ID Input */}
-        <div className="flex justify-end mb-6">
-          <div className="flex items-center gap-3">
-            <label htmlFor="tenant-id" className="text-gray-700 font-medium">
-              Tenant ID:
-            </label>
-            <input
-              type="text"
-              id="tenant-id"
-              value={tenantId}
-              onChange={(e) => setTenantId(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && applyTenantId()}
-              placeholder="Enter Tenant ID"
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={applyTenantId}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
-            >
-              Apply
-            </button>
-          </div>
-        </div>
+        {/* Tenant ID UI removed — server derives tenant context */}
 
         {/* Title */}
         <h1 className="text-4xl font-bold text-gray-800 text-center mb-8">

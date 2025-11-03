@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../services/db';
+import { ensureUserAndTenant } from '../services/tenancy';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
@@ -90,11 +91,11 @@ export async function verifyToken(
       return reply.code(401).send({ error: 'Missing or invalid authorization header' });
     }
 
-    const token = authHeader.substring(7);
-    const jwtSecret = process.env.JWT_SECRET;
+  const token = authHeader.substring(7);
+  const jwtSecret = process.env.JWT_SECRET;
 
     if (!jwtSecret) {
-      return reply.code(500).send({ error: 'Server configuration error' });
+      return reply.code(500).send({ error: 'JWT secret not configured' });
     }
 
     // Verify token with Supabase JWT secret
@@ -119,5 +120,28 @@ export async function verifyToken(
 
 export async function authRoutes(fastify: FastifyInstance) {
   fastify.post('/auth/login', login);
+  // Returns the authenticated user's id, email, tenantId and role. Provisions user+tenant if needed.
+  fastify.get('/auth/me', { preHandler: verifyToken }, async (request, reply) => {
+    const u = (request as any).user as { userId: string; email?: string } | undefined;
+    if (!u?.userId) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+
+    const ensured = await ensureUserAndTenant({
+      userId: u.userId,
+      email: u.email ?? 'unknown@example.com',
+    });
+
+    const dbUser = (await prisma.user.findUnique({
+      where: { id: ensured.userId },
+    })) as any;
+
+    return reply.send({
+      userId: ensured.userId,
+      email: dbUser?.email ?? u.email,
+      tenantId: dbUser?.tenantId ?? ensured.tenantId,
+      role: dbUser?.role ?? 'MEMBER',
+    });
+  });
 }
 

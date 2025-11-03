@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
+import { getMe } from '@/lib/api';
 
 export default function LoadTestsPage() {
   const { user } = useAuth();
@@ -9,14 +10,18 @@ export default function LoadTestsPage() {
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Load tenantId from user metadata on mount
+  // Fetch the user's tenant id from the API
   useEffect(() => {
-    if (user?.email) {
-      // Use email domain as default tenantId
-      const domain = user.email.split('@')[1] || 'default';
-      setTenantId(domain);
-      setCurrentTenantId(domain);
-    }
+    (async () => {
+      if (!user) return;
+      try {
+        const me = await getMe();
+        setTenantId(me.tenantId);
+        setCurrentTenantId(me.tenantId);
+      } catch (e) {
+        // Non-blocking for now
+      }
+    })();
   }, [user]);
 
   const applyTenantId = async () => {
@@ -30,29 +35,7 @@ export default function LoadTestsPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Tenant ID Input */}
-        <div className="flex justify-end mb-6">
-          <div className="flex items-center gap-3">
-            <label htmlFor="tenant-id" className="text-gray-700 font-medium">
-              Tenant ID:
-            </label>
-            <input
-              type="text"
-              id="tenant-id"
-              value={tenantId}
-              onChange={(e) => setTenantId(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && applyTenantId()}
-              placeholder="Enter Tenant ID"
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={applyTenantId}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
-            >
-              Apply
-            </button>
-          </div>
-        </div>
+        {/* Tenant ID UI removed — using /auth/me */}
 
         {/* Title */}
         <h1 className="text-4xl font-bold text-gray-800 text-center mb-8">

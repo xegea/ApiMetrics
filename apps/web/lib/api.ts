@@ -59,11 +59,22 @@ export interface LoginResponse {
   };
 }
 
+export interface MeResponse {
+  userId: string;
+  email?: string;
+  tenantId: string;
+  role?: 'ADMIN' | 'MEMBER';
+}
+
 export async function login(email: string, password: string): Promise<LoginResponse> {
   return fetchAPI<LoginResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
+}
+
+export async function getMe(): Promise<MeResponse> {
+  return fetchAPI<MeResponse>('/auth/me');
 }
 
 export async function getTestResults(): Promise<TestResult[]> {
@@ -72,6 +83,20 @@ export async function getTestResults(): Promise<TestResult[]> {
 
 export async function getTestResult(id: string): Promise<TestResult> {
   return fetchAPI<TestResult>(`/results/${id}`);
+}
+
+// Seed random test results for the current authenticated user's tenant
+export interface SeedResultsResponse {
+  inserted: number;
+  tenantId: string;
+  project: string;
+}
+
+export async function seedResults(params?: { count?: number; project?: string }): Promise<SeedResultsResponse> {
+  return fetchAPI<SeedResultsResponse>('/results/seed', {
+    method: 'POST',
+    body: JSON.stringify({ count: params?.count, project: params?.project }),
+  });
 }
 
 // Test Endpoints API
@@ -86,7 +111,8 @@ export interface TestEndpoint {
 }
 
 export interface CreateTestEndpointRequest {
-  tenantId: string;
+  // tenantId is derived by the server; optional for backward-compat
+  tenantId?: string;
   endpoint: string;
   httpMethod: string;
   requestBody?: string;
@@ -99,14 +125,17 @@ export interface GetTestEndpointsResponse {
 }
 
 export async function createTestEndpoint(data: CreateTestEndpointRequest): Promise<TestEndpoint> {
+  // Do not send tenantId if undefined; the API derives it from the authenticated user
+  const { tenantId, ...rest } = data;
   return fetchAPI<TestEndpoint>('/endpoints', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(rest),
   });
 }
 
-export async function getTestEndpoints(tenantId: string): Promise<GetTestEndpointsResponse> {
-  return fetchAPI<GetTestEndpointsResponse>(`/endpoints?tenantId=${encodeURIComponent(tenantId)}`);
+export async function getTestEndpoints(tenantId?: string): Promise<GetTestEndpointsResponse> {
+  const path = tenantId ? `/endpoints?tenantId=${encodeURIComponent(tenantId)}` : '/endpoints';
+  return fetchAPI<GetTestEndpointsResponse>(path);
 }
 
 export async function deleteTestEndpoint(id: string): Promise<void> {

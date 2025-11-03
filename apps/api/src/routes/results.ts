@@ -1,6 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { TestResult } from '@apimetrics/shared';
 import { prisma } from '../services/db';
+import { verifyToken } from './auth';
+import { ensureUserAndTenant } from '../services/tenancy';
 import { gunzip } from 'zlib';
 import { promisify } from 'util';
 
@@ -16,6 +18,13 @@ interface PostResultsBody {
 
 interface GetResultsParams {
   id: string;
+}
+
+interface SeedResultsBody {
+  count?: number; // number of rows to generate
+  project?: string; // optional project label
+  tenantId?: string; // optional override
+  userId?: string;   // optional override
 }
 
 /**
@@ -49,22 +58,35 @@ async function postResults(
       return reply.code(400).send({ error: 'Invalid test result data' });
     }
 
-    // Save to database
+    // Require auth and derive tenant/user
+    const user = (request as any).user;
+    if (!user?.userId) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+
+    const ensured = await ensureUserAndTenant({
+      userId: user.userId,
+      email: user.email ?? 'unknown@example.com',
+    });
+
+    // Save to database with tenant/user context
     const saved = await prisma.testResult.upsert({
       where: { testId: result.id },
-      update: {
+      update: ({
         avgLatency: result.avgLatency,
         p95Latency: result.p95Latency,
         successRate: result.successRate,
         timestamp: new Date(result.timestamp),
-      },
-      create: {
+      } as any),
+      create: ({
         testId: result.id,
         avgLatency: result.avgLatency,
         p95Latency: result.p95Latency,
         successRate: result.successRate,
         timestamp: new Date(result.timestamp),
-      },
+        tenantId: ensured.tenantId,
+        userId: ensured.userId,
+      } as any),
     });
 
     return reply.code(201).send({
@@ -87,9 +109,14 @@ async function getResults(
 ) {
   try {
     const { id } = request.params;
+    const user = (request as any).user;
+    if (!user?.userId) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    const ensured = await ensureUserAndTenant({ userId: user.userId, email: user.email ?? 'unknown@example.com' });
 
-    const result = await prisma.testResult.findUnique({
-      where: { testId: id },
+    const result = await prisma.testResult.findFirst({
+      where: ({ testId: id, tenantId: ensured.tenantId } as any),
     });
 
     if (!result) {
@@ -121,7 +148,14 @@ async function listResults(
   reply: FastifyReply
 ) {
   try {
+    const user = (request as any).user;
+    if (!user?.userId) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    const ensured = await ensureUserAndTenant({ userId: user.userId, email: user.email ?? 'unknown@example.com' });
+
     const results = await prisma.testResult.findMany({
+      where: ({ tenantId: ensured.tenantId } as any),
       orderBy: { timestamp: 'desc' },
       take: 100, // Limit to recent 100 results
     });
@@ -142,8 +176,64 @@ async function listResults(
 }
 
 export async function resultsRoutes(fastify: FastifyInstance) {
-  fastify.post('/results', postResults);
-  fastify.get('/results', listResults);
-  fastify.get('/results/:id', getResults);
+  fastify.post<{ Body: PostResultsBody | Buffer }>('/results', { preHandler: verifyToken }, postResults);
+  fastify.get('/results', { preHandler: verifyToken }, listResults);
+  fastify.get<{ Params: GetResultsParams }>('/results/:id', { preHandler: verifyToken }, getResults);
+
+  // Seed random test results for the authenticated user's tenant
+  fastify.post<{ Body: SeedResultsBody }>('/results/seed', { preHandler: verifyToken }, async (request, reply) => {
+    try {
+      const user = (request as any).user;
+      if (!user?.userId) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+
+      // Allow optional override via body (both must be provided together)
+      let tenantId = request.body?.tenantId;
+      let userId = request.body?.userId;
+      if (!tenantId || !userId) {
+        const ensured = await ensureUserAndTenant({ userId: user.userId, email: user.email ?? 'unknown@example.com' });
+        tenantId = ensured.tenantId;
+        userId = ensured.userId;
+      }
+      const count = Math.max(1, Math.min(200, Number(request.body?.count ?? 20)));
+      const project = request.body?.project ?? 'demo';
+
+      const now = Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const rand = (min: number, max: number) => Math.random() * (max - min) + min;
+
+      const rows = Array.from({ length: count }).map((_, i) => {
+        const avg = Math.round(rand(50, 600));
+        const p95 = Math.round(avg + rand(20, 300));
+        const sr = Math.min(0.999, Math.max(0.6, rand(0.85, 0.99)));
+        const ts = new Date(now - Math.floor(rand(0, 30)) * dayMs - Math.floor(rand(0, 86400)) * 1000);
+        const id = `seed-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`;
+        return {
+          testId: id,
+          avgLatency: avg,
+          p95Latency: Math.max(p95, avg + 5),
+          successRate: sr,
+          timestamp: ts,
+          project,
+          tenantId: tenantId!,
+          userId: userId!,
+          createdAt: ts,
+          updatedAt: ts,
+        };
+      });
+
+      // Use createMany for performance; ignore duplicates on testId if any
+      const created = await prisma.testResult.createMany({
+        data: rows,
+        skipDuplicates: true,
+      });
+
+      return reply.code(201).send({ inserted: created.count, tenantId, project });
+    } catch (error) {
+      request.log.error(error, 'Error seeding test results');
+      return reply.code(500).send({ error: 'Failed to seed test results' });
+    }
+  });
 }
 
