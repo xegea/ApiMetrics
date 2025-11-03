@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply, RouteGenericInterface, RouteHandlerMethod } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../services/db';
 import { verifyToken } from './auth';
 
@@ -22,11 +22,10 @@ interface DeleteEndpointParams {
  * POST /endpoints
  * Create a new test endpoint
  */
-interface CreateEndpointRoute extends RouteGenericInterface {
-  Body: CreateEndpointBody;
-}
-
-const createEndpoint: RouteHandlerMethod<CreateEndpointRoute> = async (request, reply) => {
+async function createEndpoint(
+  request: FastifyRequest<{ Body: CreateEndpointBody }>,
+  reply: FastifyReply
+) {
   try {
     // Get user from token (set by verifyToken middleware)
     const user = (request as any).user;
@@ -49,7 +48,7 @@ const createEndpoint: RouteHandlerMethod<CreateEndpointRoute> = async (request, 
     }
 
     // Create the endpoint
-    const testEndpoint = await prisma.testEndpoint.create({
+  const testEndpoint = await prisma.testEndpoint.create({
       data: {
         tenantId,
         userId: user.userId,
@@ -91,7 +90,7 @@ async function getEndpoints(
     }
 
     // Get all endpoints for the tenant
-    const endpoints = await prisma.testEndpoint.findMany({
+  const endpoints = await prisma.testEndpoint.findMany({
       where: {
         tenantId,
       },
@@ -135,11 +134,10 @@ async function getEndpoints(
  * DELETE /endpoints/:id
  * Delete a test endpoint
  */
-interface DeleteEndpointRoute extends RouteGenericInterface {
-  Params: DeleteEndpointParams;
-}
-
-const deleteEndpoint: RouteHandlerMethod<DeleteEndpointRoute> = async (request, reply) => {
+async function deleteEndpoint(
+  request: FastifyRequest<{ Params: DeleteEndpointParams }>,
+  reply: FastifyReply
+) {
   try {
     const user = (request as any).user;
     const { id } = request.params;
@@ -149,7 +147,7 @@ const deleteEndpoint: RouteHandlerMethod<DeleteEndpointRoute> = async (request, 
     }
 
     // Check if endpoint exists and belongs to user's tenant
-    const endpoint = await prisma.testEndpoint.findUnique({
+  const endpoint = await prisma.testEndpoint.findUnique({
       where: { id },
     });
 
@@ -158,7 +156,7 @@ const deleteEndpoint: RouteHandlerMethod<DeleteEndpointRoute> = async (request, 
     }
 
     // Delete the endpoint
-    await prisma.testEndpoint.delete({
+  await prisma.testEndpoint.delete({
       where: { id },
     });
 
@@ -171,8 +169,8 @@ const deleteEndpoint: RouteHandlerMethod<DeleteEndpointRoute> = async (request, 
 
 export async function endpointsRoutes(fastify: FastifyInstance) {
   // Protected routes (require authentication)
-  fastify.post<CreateEndpointRoute>('/endpoints', { preHandler: verifyToken }, createEndpoint);
-  fastify.delete<DeleteEndpointRoute>('/endpoints/:id', { preHandler: verifyToken }, deleteEndpoint);
+  fastify.post<{ Body: CreateEndpointBody }>('/endpoints', { preHandler: verifyToken }, createEndpoint);
+  fastify.delete<{ Params: DeleteEndpointParams }>('/endpoints/:id', { preHandler: verifyToken }, deleteEndpoint);
   
   // Public route (can be called without auth for now)
   fastify.get('/endpoints', getEndpoints);
