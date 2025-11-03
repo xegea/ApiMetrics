@@ -47,6 +47,19 @@ async function createEndpoint(
       return reply.code(400).send({ error: 'Invalid HTTP method' });
     }
 
+    // Ensure a User record exists for this Supabase user (FK constraint)
+    // Supabase provides the UID in `sub` which we mapped to user.userId in verifyToken
+    await prisma.user.upsert({
+      where: { id: user.userId },
+      update: { email: user.email ?? undefined },
+      create: {
+        id: user.userId,
+        email: user.email ?? `unknown+${user.userId}@example.com`,
+        // Placeholder password; not used with Supabase Auth
+        password: 'supabase-user',
+      },
+    });
+
     // Create the endpoint
   const testEndpoint = await prisma.testEndpoint.create({
       data: {
@@ -68,9 +81,11 @@ async function createEndpoint(
       headers: testEndpoint.headers,
       createdAt: testEndpoint.createdAt,
     });
-  } catch (error) {
-    request.log.error(error, 'Error creating test endpoint');
-    return reply.code(500).send({ error: 'Failed to create test endpoint' });
+  } catch (error: any) {
+    // Log detailed prisma error info if available
+    request.log.error({ error }, 'Error creating test endpoint');
+    const message = (error?.meta?.cause as string) || error?.message || 'Failed to create test endpoint';
+    return reply.code(500).send({ error: message });
   }
 }
 
