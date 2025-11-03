@@ -31,9 +31,31 @@ model User {
   id        String   @id @default(uuid())
   email     String   @unique
   password  String   // Hashed password
+  tenantId  String?  // Optional tenant ID for multi-tenancy
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  endpoints TestEndpoint[]
+
+  @@index([tenantId])
   @@map("users")
 }
 
+model TestEndpoint {
+  id          String   @id @default(uuid())
+  tenantId    String   // Tenant ID for grouping users
+  userId      String   // User who created the endpoint
+  endpoint    String   // Full URL like https://api.example.com/v1/health
+  httpMethod  String   // GET, POST, PUT, DELETE, etc.
+  requestBody String?  @db.Text // Request body/payload for POST/PUT/PATCH
+  headers     String?  @db.Text // HTTP headers (one per line)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([tenantId, endpoint, httpMethod])
+  @@map("test_endpoints")
+}

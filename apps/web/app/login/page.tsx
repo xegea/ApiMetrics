@@ -19,8 +19,9 @@ export default function LoginPage() {
     try {
       const response = await login(email, password);
       
-      // Store token in localStorage
+      // Store token and user email in localStorage
       localStorage.setItem('auth_token', response.token);
+      localStorage.setItem('user_email', response.user.email);
       
       // Redirect to dashboard
       router.push('/dashboard');

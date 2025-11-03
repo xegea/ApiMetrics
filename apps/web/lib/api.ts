@@ -74,3 +74,43 @@ export async function getTestResult(id: string): Promise<TestResult> {
   return fetchAPI<TestResult>(`/results/${id}`);
 }
 
+// Test Endpoints API
+export interface TestEndpoint {
+  id: string;
+  endpoint: string;
+  httpMethod: string;
+  requestBody?: string;
+  headers?: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export interface CreateTestEndpointRequest {
+  tenantId: string;
+  endpoint: string;
+  httpMethod: string;
+  requestBody?: string;
+  headers?: string;
+}
+
+export interface GetTestEndpointsResponse {
+  tenantId: string;
+  endpoints: TestEndpoint[];
+}
+
+export async function createTestEndpoint(data: CreateTestEndpointRequest): Promise<TestEndpoint> {
+  return fetchAPI<TestEndpoint>('/endpoints', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getTestEndpoints(tenantId: string): Promise<GetTestEndpointsResponse> {
+  return fetchAPI<GetTestEndpointsResponse>(`/endpoints?tenantId=${encodeURIComponent(tenantId)}`);
+}
+
+export async function deleteTestEndpoint(id: string): Promise<void> {
+  return fetchAPI<void>(`/endpoints/${id}`, {
+    method: 'DELETE',
+  });
+}
