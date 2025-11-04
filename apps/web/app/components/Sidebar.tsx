@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useAuth } from '@/lib/auth';
 
 interface MenuItem {
   label: string;
@@ -35,10 +36,18 @@ const menuItems: MenuItem[] = [
 ];
 
 export function Sidebar() {
+  const { user, loading } = useAuth();
   const pathname = usePathname();
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(['Test Endpoints', 'Metrics'])
   );
+
+  // Hide sidebar if still loading or not logged in
+  if (loading || !user) return null;
+
+  // Logo style variables
+  const logoTextClass = 'text-2xl font-bold text-white';
+  const logoIconClass = 'text-3xl text-white';
 
   const toggleSection = (label: string) => {
     const newExpanded = new Set(expandedSections);
@@ -54,13 +63,11 @@ export function Sidebar() {
 
   return (
     <div className="w-64 bg-gray-900 text-white min-h-screen p-4 flex flex-col">
-      {/* Logo/Title */}
+      {/* Logo/Title in normal flow */}
       <div className="mb-8 pb-4 border-b border-gray-700">
         <Link href="/" className="flex items-center gap-2 group">
-          <span className="text-2xl">⚡</span>
-          <h1 className="text-xl font-bold group-hover:text-blue-400 transition">
-            ApiMetrics
-          </h1>
+          <span className={logoIconClass}>⚡</span>
+          <span className={logoTextClass + ' group-hover:text-blue-400 transition'}>ApiMetrics</span>
         </Link>
       </div>
 

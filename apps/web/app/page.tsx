@@ -90,6 +90,15 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      {/* Logo at top left only when not logged in (no sidebar) */}
+      {!user && (
+        <div className="absolute top-0 left-0 p-6 z-20">
+          <Link href="/" className="flex items-center gap-2 group">
+            <span className="text-3xl text-blue-600">⚡</span>
+            <span className="text-2xl font-bold text-blue-700 group-hover:text-blue-400 transition">ApiMetrics</span>
+          </Link>
+        </div>
+      )}
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
@@ -260,7 +269,7 @@ export default function Home() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-3xl">⚡</span>
-                <span className="text-xl font-bold">ApiMetrics</span>
+                <span className="text-2xl font-bold text-blue-700">ApiMetrics</span>
               </div>
               <p className="text-gray-400">
                 Professional API load testing and monitoring platform

@@ -21,8 +21,14 @@ async function getHeaders(): Promise<HeadersInit> {
   return headers;
 }
 
-async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+async function fetchAPI<T>(endpoint: string, options?: RequestInit & { requireAuth?: boolean }): Promise<T> {
   try {
+    const token = await getAuthToken();
+    if (options?.requireAuth && !token) {
+      // Do not even attempt a network call if auth is required and no token is present
+      throw new Error('Not authenticated');
+    }
+
     const authHeaders = await getHeaders();
     const response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
@@ -74,15 +80,15 @@ export async function login(email: string, password: string): Promise<LoginRespo
 }
 
 export async function getMe(): Promise<MeResponse> {
-  return fetchAPI<MeResponse>('/auth/me');
+  return fetchAPI<MeResponse>('/auth/me', { requireAuth: true });
 }
 
 export async function getTestResults(): Promise<TestResult[]> {
-  return fetchAPI<TestResult[]>('/results');
+  return fetchAPI<TestResult[]>('/results', { requireAuth: true });
 }
 
 export async function getTestResult(id: string): Promise<TestResult> {
-  return fetchAPI<TestResult>(`/results/${id}`);
+  return fetchAPI<TestResult>(`/results/${id}`, { requireAuth: true });
 }
 
 // Seed random test results for the current authenticated user's tenant
@@ -96,6 +102,7 @@ export async function seedResults(params?: { count?: number; project?: string })
   return fetchAPI<SeedResultsResponse>('/results/seed', {
     method: 'POST',
     body: JSON.stringify({ count: params?.count, project: params?.project }),
+    requireAuth: true,
   });
 }
 
@@ -130,16 +137,18 @@ export async function createTestEndpoint(data: CreateTestEndpointRequest): Promi
   return fetchAPI<TestEndpoint>('/endpoints', {
     method: 'POST',
     body: JSON.stringify(rest),
+    requireAuth: true,
   });
 }
 
 export async function getTestEndpoints(tenantId?: string): Promise<GetTestEndpointsResponse> {
   const path = tenantId ? `/endpoints?tenantId=${encodeURIComponent(tenantId)}` : '/endpoints';
-  return fetchAPI<GetTestEndpointsResponse>(path);
+  return fetchAPI<GetTestEndpointsResponse>(path, { requireAuth: true });
 }
 
 export async function deleteTestEndpoint(id: string): Promise<void> {
   return fetchAPI<void>(`/endpoints/${id}`, {
     method: 'DELETE',
+    requireAuth: true,
   });
 }

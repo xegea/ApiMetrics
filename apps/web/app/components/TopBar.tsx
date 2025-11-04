@@ -5,17 +5,21 @@ import { useState } from 'react';
 import { SignupModal } from './SignupModal';
 import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 
 export function TopBar() {
   const [showSignupModal, setShowSignupModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const handleLogout = async () => {
     await signOut();
+    // Clear all cached queries so protected data isn't shown after logout
+    try { queryClient.clear(); } catch {}
     setShowUserMenu(false);
-    router.push('/login');
+  router.push('/');
   };
 
   // Get username from email (part before @)

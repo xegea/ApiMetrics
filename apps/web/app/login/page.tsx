@@ -27,8 +27,8 @@ export default function LoginPage() {
         return;
       }
       
-      // Redirect to dashboard
-      router.push('/dashboard');
+  // Redirect to home
+  router.push('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
       setLoading(false);
@@ -37,10 +37,24 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      {/* Logo at top left, fixed position */}
+      <div className="absolute top-0 left-0 p-6 z-20">
+        <Link href="/" className="flex items-center gap-2 group">
+          <span className="text-3xl text-blue-600">⚡</span>
+          <span className="text-2xl font-bold text-blue-700 group-hover:text-blue-400 transition">ApiMetrics</span>
+        </Link>
+      </div>
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md">
+        {/* Logo/Title linking to home (centered for mobile) */}
+        <div className="flex flex-col items-center mb-2 md:hidden">
+          <Link href="/" className="flex items-center gap-2 group">
+            <span className="text-3xl text-blue-600">⚡</span>
+            <span className="text-2xl font-bold text-blue-700 group-hover:text-blue-400 transition">ApiMetrics</span>
+          </Link>
+        </div>
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            ApiMetrics Login
+          <h2 className="mt-2 text-center text-3xl font-extrabold text-gray-900">
+            Login
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Sign in to view your load test results
