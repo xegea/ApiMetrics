@@ -5,10 +5,18 @@ import { verifyToken } from './auth';
 
 interface CreateExecutionPlanBody {
   name: string;
+  executionTime?: string;
+  delayBetweenRequests?: string;
+  iterations?: number;
+  rampUpPeriods?: string;
 }
 
 interface UpdateExecutionPlanBody {
-  name: string;
+  name?: string;
+  executionTime?: string;
+  delayBetweenRequests?: string;
+  iterations?: number;
+  rampUpPeriods?: string;
 }
 
 interface CreateTestRequestBody {
@@ -72,7 +80,7 @@ async function createExecutionPlan(
       return reply.code(401).send({ error: 'Unauthorized' });
     }
 
-    const { name } = request.body;
+    const { name, executionTime, delayBetweenRequests, iterations, rampUpPeriods } = request.body;
 
     // Validate required fields
     if (!name || !name.trim()) {
@@ -85,12 +93,16 @@ async function createExecutionPlan(
       email: user.email ?? `unknown+${user.userId}@example.com`,
     });
 
-    // Create the execution plan
+    // Create the execution plan with default values
     const executionPlan = await (prisma as any).executionPlan.create({
       data: {
         tenantId: ensured.tenantId,
         userId: user.userId,
         name: name.trim(),
+        executionTime: executionTime || '1m',
+        delayBetweenRequests: delayBetweenRequests || '100ms',
+        iterations: iterations ?? 1,
+        rampUpPeriods: rampUpPeriods || null,
       },
     });
 
@@ -112,6 +124,10 @@ async function createExecutionPlan(
       id: executionPlan.id,
       tenantId: executionPlan.tenantId,
       name: executionPlan.name,
+      executionTime: executionPlan.executionTime,
+      delayBetweenRequests: executionPlan.delayBetweenRequests,
+      iterations: executionPlan.iterations,
+      rampUpPeriods: executionPlan.rampUpPeriods,
       createdAt: executionPlan.createdAt,
       testRequests: [{
         id: defaultRequest.id,
@@ -199,6 +215,10 @@ async function getExecutionPlans(
       executionPlans: executionPlans.map((plan: any) => ({
         id: plan.id,
         name: plan.name,
+        executionTime: plan.executionTime,
+        delayBetweenRequests: plan.delayBetweenRequests,
+        iterations: plan.iterations,
+        rampUpPeriods: plan.rampUpPeriods,
         createdAt: plan.createdAt,
         createdBy: plan.user?.email || 'Unknown',
         testRequests: plan.testRequests.map((req: any) => ({
@@ -361,10 +381,6 @@ async function deleteExecutionPlan(
   }
 }
 
-/**
- * PUT /executionplans/:id
- * Update an execution plan name
- */
 async function updateExecutionPlan(
   request: FastifyRequest<{ Params: UpdateExecutionPlanParams; Body: UpdateExecutionPlanBody }>,
   reply: FastifyReply
@@ -372,14 +388,10 @@ async function updateExecutionPlan(
   try {
     const user = (request as any).user;
     const { id } = request.params;
-    const { name } = request.body;
+    const { name, executionTime, delayBetweenRequests, iterations, rampUpPeriods } = request.body;
 
     if (!user || !user.userId) {
       return reply.code(401).send({ error: 'Unauthorized' });
-    }
-
-    if (!name || !name.trim()) {
-      return reply.code(400).send({ error: 'Execution plan name is required' });
     }
 
     // Ensure a User and Tenant record exist for this Supabase user (FK constraints)
@@ -400,14 +412,45 @@ async function updateExecutionPlan(
       return reply.code(404).send({ error: 'Execution plan not found or access denied' });
     }
 
+    // Prepare update data - only include fields that are provided
+    const updateData: any = {};
+    if (name !== undefined) {
+      if (!name || !name.trim()) {
+        return reply.code(400).send({ error: 'Execution plan name cannot be empty' });
+      }
+      updateData.name = name.trim();
+    }
+    if (executionTime !== undefined) updateData.executionTime = executionTime;
+    if (delayBetweenRequests !== undefined) updateData.delayBetweenRequests = delayBetweenRequests;
+    if (iterations !== undefined) updateData.iterations = iterations;
+    if (rampUpPeriods !== undefined) updateData.rampUpPeriods = rampUpPeriods;
+
     // Update the execution plan
     const updatedPlan = await (prisma as any).executionPlan.update({
       where: { id },
-      data: { name: name.trim() },
+      data: updateData,
       include: {
         user: {
           select: {
             email: true,
+          },
+        },
+        testRequests: {
+          orderBy: {
+            orderId: 'asc',
+          },
+          select: {
+            id: true,
+            endpoint: true,
+            httpMethod: true,
+            requestBody: true,
+            headers: true,
+            createdAt: true,
+            user: {
+              select: {
+                email: true,
+              },
+            },
           },
         },
       },
@@ -416,8 +459,21 @@ async function updateExecutionPlan(
     return reply.send({
       id: updatedPlan.id,
       name: updatedPlan.name,
+      executionTime: updatedPlan.executionTime,
+      delayBetweenRequests: updatedPlan.delayBetweenRequests,
+      iterations: updatedPlan.iterations,
+      rampUpPeriods: updatedPlan.rampUpPeriods,
       createdAt: updatedPlan.createdAt,
       createdBy: updatedPlan.user.email,
+      testRequests: updatedPlan.testRequests.map((req: any) => ({
+        id: req.id,
+        endpoint: req.endpoint,
+        httpMethod: req.httpMethod,
+        requestBody: req.requestBody,
+        headers: req.headers,
+        createdAt: req.createdAt,
+        createdBy: req.user?.email || 'Unknown',
+      })),
     });
   } catch (error: any) {
     request.log.error({ error }, 'Error updating execution plan');

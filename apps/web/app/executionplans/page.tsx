@@ -11,6 +11,8 @@ import FolderIcon from '@mui/icons-material/Folder';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import InfoIcon from '@mui/icons-material/Info';
+import { Tooltip } from '@mui/material';
 import {
   DndContext,
   closestCenter,
@@ -44,6 +46,7 @@ interface SortableTestRequestProps {
   baseUrl: string;
   queryParams: [string, string][];
   onClone: (request: TestRequest, planId: string) => void;
+  isEditable: boolean;
 }
 
 function DroppablePlan({ plan, planKey, children }: { plan: ExecutionPlan; planKey: string; children: React.ReactNode }) {
@@ -67,7 +70,7 @@ function DroppablePlan({ plan, planKey, children }: { plan: ExecutionPlan; planK
   );
 }
 
-function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete, isExpanded, onToggleExpansion, baseUrl, queryParams, onClone }: SortableTestRequestProps) {
+function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete, isExpanded, onToggleExpansion, baseUrl, queryParams, onClone, isEditable }: SortableTestRequestProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `request_${request.id}_${planId}`,
     data: { type: 'request', request, planId },
@@ -79,7 +82,16 @@ function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete
     <div ref={setNodeRef} style={style} className={`ml-8 mr-4 mb-4 mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors group cursor-pointer ${isDragging ? 'opacity-0' : 'opacity-100'}`} onClick={() => onToggleExpansion(request.id)}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 flex-1">
-          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-2 hover:bg-gray-200 rounded flex flex-col justify-center items-center" title="Drag to reorder" onClick={(e) => e.stopPropagation()}>
+          <div 
+            {...(isEditable ? { ...attributes, ...listeners } : {})} 
+            className={`p-2 rounded flex flex-col justify-center items-center ${
+              isEditable 
+                ? 'cursor-grab active:cursor-grabbing hover:bg-gray-200' 
+                : 'cursor-not-allowed opacity-50'
+            }`} 
+            title={isEditable ? "Drag to reorder" : "Enable edit mode to reorder"} 
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="w-4 h-0.5 bg-gray-400 mb-1"></div>
             <div className="w-4 h-0.5 bg-gray-400 mb-1"></div>
             <div className="w-4 h-0.5 bg-gray-400"></div>
@@ -93,13 +105,40 @@ function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete
           <button onClick={(e) => { e.stopPropagation(); onToggleExpansion(request.id); }} className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded" title={isExpanded ? "Collapse" : "Expand"}>
             {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onEdit(request); }} className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded" title="Edit">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onEdit(request); }} 
+            disabled={!isEditable}
+            className={`p-1 rounded ${
+              isEditable 
+                ? 'text-gray-600 hover:text-blue-600 hover:bg-blue-50' 
+                : 'text-gray-400 cursor-not-allowed'
+            }`} 
+            title={isEditable ? "Edit" : "Enable edit mode to modify"}
+          >
             <EditIcon fontSize="small" />
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onClone(request, planId); }} className="p-1 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded" title="Clone">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onClone(request, planId); }} 
+            disabled={!isEditable}
+            className={`p-1 rounded ${
+              isEditable 
+                ? 'text-gray-600 hover:text-green-600 hover:bg-green-50' 
+                : 'text-gray-400 cursor-not-allowed'
+            }`} 
+            title={isEditable ? "Clone" : "Enable edit mode to clone"}
+          >
             <ContentCopyIcon fontSize="small" />
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(request.id); }} className="p-1 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded" title="Delete">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onDelete(request.id); }} 
+            disabled={!isEditable}
+            className={`p-1 rounded ${
+              isEditable 
+                ? 'text-gray-600 hover:text-red-600 hover:bg-red-50' 
+                : 'text-gray-400 cursor-not-allowed'
+            }`} 
+            title={isEditable ? "Delete" : "Enable edit mode to delete"}
+          >
             <DeleteIcon fontSize="small" />
           </button>
         </div>
@@ -168,6 +207,13 @@ export default function ExecutionPlansPage() {
   const [newHttpMethod, setNewHttpMethod] = useState('GET');
   const [newRequestBody, setNewRequestBody] = useState('');
   const [newRequestHeaders, setNewRequestHeaders] = useState('');
+  const [executionTime, setExecutionTime] = useState('');
+  const [rampUpPeriod, setRampUpPeriod] = useState('');
+  const [delayBetweenRequests, setDelayBetweenRequests] = useState('');
+  const [iterations, setIterations] = useState('');
+  const [rampUpPeriods, setRampUpPeriods] = useState<Array<{initTime: string, endTime: string, virtualUsers: string}>>([]);
+  const [editingPlans, setEditingPlans] = useState<string[]>([]);
+  const [savingPlans, setSavingPlans] = useState<string[]>([]);
 
   const parseEndpoint = (endpoint: string) => {
     try {
@@ -188,12 +234,46 @@ export default function ExecutionPlansPage() {
     return text.substring(0, maxLength) + '...';
   };
 
+  const getPlanConfigSummary = (plan: ExecutionPlan) => {
+    const parts = [];
+    if (plan.executionTime) parts.push(`Time: ${plan.executionTime}`);
+    if (plan.delayBetweenRequests) parts.push(`Delay: ${plan.delayBetweenRequests}`);
+    if (plan.iterations) parts.push(`Iter: ${plan.iterations}`);
+    const parsedRampUpPeriods = plan.rampUpPeriods ? JSON.parse(plan.rampUpPeriods) : [];
+    if (parsedRampUpPeriods.length > 0) parts.push(`Ramp up: ${parsedRampUpPeriods.length} periods`);
+    return parts.length > 0 ? ` • ${parts.join(', ')}` : '';
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const isValidPlanName = () => planName.trim().length > 0;
+
+  // Validation patterns for configuration fields
+  const timePattern = /^(\d+)(s|ms|m|h)?$/i; // e.g., 30s, 5m, 1h, 100ms
+  const numberPattern = /^\d+$/; // e.g., 10, 100
+
+  const isValidExecutionTime = () => !executionTime || timePattern.test(executionTime);
+  const isValidDelayBetweenRequests = () => !delayBetweenRequests || timePattern.test(delayBetweenRequests);
+  const isValidIterations = () => !iterations || numberPattern.test(iterations);
+  
+  const isValidRampUpPeriods = () => {
+    if (rampUpPeriods.length === 0) return true;
+    return rampUpPeriods.every(period => 
+      (!period.initTime || timePattern.test(period.initTime)) &&
+      (!period.endTime || timePattern.test(period.endTime)) &&
+      (!period.virtualUsers || numberPattern.test(period.virtualUsers))
+    );
+  };
+
+  const isValidConfiguration = () => {
+    return isValidExecutionTime() && 
+           isValidDelayBetweenRequests() && 
+           isValidIterations() && 
+           isValidRampUpPeriods();
+  };
 
   const getMethodColor = (method: string) => {
     const colors: Record<string, string> = {
@@ -224,7 +304,13 @@ export default function ExecutionPlansPage() {
   const saveExecutionPlan = async () => {
     if (!isValidPlanName()) return;
     try {
-      await createExecutionPlan({ name: planName.trim() });
+      await createExecutionPlan({ 
+        name: planName.trim(),
+        executionTime: '1m',
+        delayBetweenRequests: '100ms',
+        iterations: 1,
+        rampUpPeriods: undefined // Empty, user can add later
+      });
       setPlanName('');
       await listExecutionPlans();
       setShowForm(false);
@@ -290,6 +376,10 @@ export default function ExecutionPlansPage() {
     setNewHttpMethod('GET');
     setNewRequestBody('');
     setNewRequestHeaders('');
+  };
+
+  const toggleRequestExpansion = (requestId: string) => {
+    setExpandedRequests(prev => prev.includes(requestId) ? prev.filter(id => id !== requestId) : [...prev, requestId]);
   };
 
   const handleSaveNewTestRequest = async () => {
@@ -457,11 +547,93 @@ export default function ExecutionPlansPage() {
   };
 
   const togglePlan = (key: string) => {
-    setExpandedPlans(prev => prev.includes(key) ? prev.filter(id => id !== key) : [...prev, key]);
+    const isExpanded = expandedPlans.includes(key);
+    
+    if (isExpanded) {
+      // Collapsing - extract planId from key (format: plan_<planId>)
+      const planId = key.split('_')[1];
+      
+      // Also exit edit mode if this plan is being edited
+      if (editingPlans.includes(planId)) {
+        setEditingPlans(prev => prev.filter(id => id !== planId));
+      }
+      
+      // Just collapse this plan
+      setExpandedPlans(prev => prev.filter(id => id !== key));
+    } else {
+      // Expanding - collapse all others and only expand this one
+      const planId = key.split('_')[1];
+      
+      // Exit edit mode on any currently editing plan
+      setEditingPlans([]);
+      
+      // Collapse all and expand only this one
+      setExpandedPlans([key]);
+    }
   };
 
-  const toggleRequestExpansion = (requestId: string) => {
-    setExpandedRequests(prev => prev.includes(requestId) ? prev.filter(id => id !== requestId) : [...prev, requestId]);
+  const togglePlanEditMode = async (planId: string) => {
+    const isCurrentlyEditing = editingPlans.includes(planId);
+    
+    // If exiting edit mode and validation passes, save the configuration
+    if (isCurrentlyEditing && isValidConfiguration()) {
+      // Prevent multiple save attempts
+      if (savingPlans.includes(planId)) return;
+      
+      try {
+        // Add to saving state
+        setSavingPlans(prev => [...prev, planId]);
+        
+        // Save the execution plan with the new configuration values
+        const updatedPlan = await updateExecutionPlan(planId, {
+          executionTime,
+          delayBetweenRequests,
+          iterations: iterations ? parseInt(iterations) : undefined,
+          rampUpPeriods: rampUpPeriods.length > 0 ? JSON.stringify(rampUpPeriods) : undefined,
+        });
+        
+        // Optimistically update the local state with the new plan data
+        setExecutionPlans(prev => prev.map(plan => 
+          plan.id === planId ? updatedPlan : plan
+        ));
+        
+        // Exit edit mode only after successful save
+        setEditingPlans(prev => prev.filter(id => id !== planId));
+      } catch (error) {
+        alert('Error saving execution plan: ' + (error as Error).message);
+      } finally {
+        // Remove from saving state
+        setSavingPlans(prev => prev.filter(id => id !== planId));
+      }
+    } else if (!isCurrentlyEditing) {
+      // Entering edit mode - stop editing all other plans and collapse them
+      setEditingPlans([planId]); // Only this plan in edit mode
+      setExpandedPlans([`plan_${planId}`]); // Only expand this plan
+      
+      // Initialize state with current plan values
+      const plan = executionPlans.find(p => p.id === planId);
+      if (plan) {
+        setExecutionTime(plan.executionTime || '');
+        setDelayBetweenRequests(plan.delayBetweenRequests || '');
+        setIterations(plan.iterations?.toString() || '');
+        setRampUpPeriods(plan.rampUpPeriods ? JSON.parse(plan.rampUpPeriods) : []);
+      }
+    }
+    // If validation fails while trying to exit, do nothing (button is disabled anyway)
+  };
+
+  const addRampUpPeriod = () => {
+    setRampUpPeriods(prev => [...prev, { initTime: '', endTime: '', virtualUsers: '' }]);
+  };
+
+  const removeRampUpPeriod = (index: number) => {
+    setRampUpPeriods(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateRampUpPeriod = (index: number, field: 'initTime' | 'endTime' | 'virtualUsers', value: string) => {
+    setRampUpPeriods(prev => prev.map((period, i) => 
+      i === index ? { ...period, [field]: value } : period
+    ));
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -469,6 +641,8 @@ export default function ExecutionPlansPage() {
     const data = event.active.data.current;
     if (data?.type === 'request') {
       setActiveItem({ type: 'request', request: data.request, planId: data.planId });
+      // Collapse the request if it's expanded
+      setExpandedRequests(prev => prev.filter(id => id !== data.request.id));
     }
   };
 
@@ -576,14 +750,11 @@ export default function ExecutionPlansPage() {
                         ) : (
                           <>
                             <span className="text-lg font-medium text-gray-800">{plan.name}</span>
-                            <span className="text-sm text-gray-500">({plan.testRequests.length} requests)</span>
+                            <span className="text-sm text-gray-500">({plan.testRequests.length} requests{getPlanConfigSummary(plan)})</span>
                           </>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); handleCreateNewRequest(plan.id); }} className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm">
-                          New Request
-                        </button>
                         <ChevronRightIcon className={`transform transition-transform cursor-pointer text-gray-600 hover:text-gray-800 ${expandedPlans.includes(planKey) ? 'rotate-90' : ''}`} onClick={() => togglePlan(planKey)} />
                         <div className="relative">
                           <button onClick={(e) => { e.stopPropagation(); setShowPlanMenu(showPlanMenu === plan.id ? null : plan.id); }} className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded">
@@ -606,30 +777,303 @@ export default function ExecutionPlansPage() {
                     </div>
 
                     {expandedPlans.includes(planKey) && (
-                      <div className="border-t border-gray-100">
-                        <SortableContext items={plan.testRequests.map(req => `request_${req.id}_${plan.id}`)} strategy={verticalListSortingStrategy}>
-                          {plan.testRequests.map((req) => {
-                            const reqKey = `${plan.id}-${req.id}`;
-                            const { baseUrl, queryParams } = parseEndpoint(req.endpoint);
-                            const truncatedBaseUrl = truncateText(baseUrl);
-                            const truncatedQueryParams = queryParams.map(([key, value]) => [key, truncateText(value)] as [string, string]);
-                            return (
-                              <SortableTestRequest
-                                key={reqKey}
-                                request={req}
-                                planId={plan.id}
-                                getMethodColor={getMethodColor}
-                                onEdit={handleEditTestRequest}
-                                onDelete={(requestId) => handleDeleteTestRequest(plan.id, requestId)}
-                                isExpanded={expandedRequests.includes(req.id)}
-                                onToggleExpansion={toggleRequestExpansion}
-                                baseUrl={truncatedBaseUrl}
-                                queryParams={truncatedQueryParams}
-                                onClone={handleCloneTestRequest}
-                              />
-                            );
-                          })}
-                        </SortableContext>
+                      <div>
+                        {/* Configuration Section */}
+                        <div className="border-t border-gray-100 p-4 bg-gray-50">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-medium text-gray-700">Execution Configuration</h4>
+                            <button 
+                              onClick={() => togglePlanEditMode(plan.id)}
+                              disabled={(editingPlans.includes(plan.id) && !isValidConfiguration()) || savingPlans.includes(plan.id)}
+                              className={`px-3 py-1 rounded text-sm font-medium ${
+                                savingPlans.includes(plan.id)
+                                  ? 'bg-gray-500 text-white cursor-not-allowed'
+                                  : editingPlans.includes(plan.id) 
+                                    ? isValidConfiguration()
+                                      ? 'bg-green-500 text-white hover:bg-green-600' 
+                                      : 'bg-gray-400 text-white cursor-not-allowed'
+                                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                              }`}
+                              title={
+                                savingPlans.includes(plan.id) 
+                                  ? 'Saving...' 
+                                  : editingPlans.includes(plan.id) && !isValidConfiguration() 
+                                    ? 'Please fix validation errors' 
+                                    : ''
+                              }
+                            >
+                              {savingPlans.includes(plan.id) 
+                                ? 'Saving...' 
+                                : editingPlans.includes(plan.id) 
+                                  ? 'Save' 
+                                  : 'Edit'
+                              }
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div>
+                                <div className="flex items-center gap-1 mb-1">
+                                  <label className="block text-xs font-medium text-gray-600">Execution Time</label>
+                                  <Tooltip title="Total duration for the test execution (e.g., 30s, 5m, 1h)">
+                                    <InfoIcon
+                                      fontSize="small"
+                                      className="text-gray-400 hover:text-gray-600 cursor-help"
+                                    />
+                                  </Tooltip>
+                                </div>
+                                {editingPlans.includes(plan.id) ? (
+                                  <input
+                                    type="text"
+                                    value={executionTime}
+                                    onChange={(e) => setExecutionTime(e.target.value)}
+                                    placeholder="e.g., 30s, 5m, 1h"
+                                    className={`w-full px-3 py-2 border rounded text-sm bg-white text-black ${
+                                      isValidExecutionTime() ? 'border-gray-300' : 'border-red-500'
+                                    }`}
+                                  />
+                                ) : (
+                                  <input
+                                    type="text"
+                                    value={plan.executionTime || '1m'}
+                                    disabled
+                                    className="w-full px-3 py-2 border rounded text-sm bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
+                                  />
+                                )}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1 mb-1">
+                                  <label className="block text-xs font-medium text-gray-600">Delay Between Requests</label>
+                                  <Tooltip title="Time to wait between individual requests (e.g., 100ms, 1s)">
+                                    <InfoIcon
+                                      fontSize="small"
+                                      className="text-gray-400 hover:text-gray-600 cursor-help"
+                                    />
+                                  </Tooltip>
+                                </div>
+                                {editingPlans.includes(plan.id) ? (
+                                  <input
+                                    type="text"
+                                    value={delayBetweenRequests}
+                                    onChange={(e) => setDelayBetweenRequests(e.target.value)}
+                                    placeholder="e.g., 100ms, 1s"
+                                    className={`w-full px-3 py-2 border rounded text-sm bg-white text-black ${
+                                      isValidDelayBetweenRequests() ? 'border-gray-300' : 'border-red-500'
+                                    }`}
+                                  />
+                                ) : (
+                                  <input
+                                    type="text"
+                                    value={plan.delayBetweenRequests || '100ms'}
+                                    disabled
+                                    className="w-full px-3 py-2 border rounded text-sm bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
+                                  />
+                                )}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1 mb-1">
+                                  <label className="block text-xs font-medium text-gray-600">Iterations</label>
+                                  <Tooltip title="Number of times to repeat the entire test execution (e.g., 10, 100)">
+                                    <InfoIcon
+                                      fontSize="small"
+                                      className="text-gray-400 hover:text-gray-600 cursor-help"
+                                    />
+                                  </Tooltip>
+                                </div>
+                                {editingPlans.includes(plan.id) ? (
+                                  <input
+                                    type="text"
+                                    value={iterations}
+                                    onChange={(e) => setIterations(e.target.value)}
+                                    placeholder="e.g., 10, 100"
+                                    className={`w-full px-3 py-2 border rounded text-sm bg-white text-black ${
+                                      isValidIterations() ? 'border-gray-300' : 'border-red-500'
+                                    }`}
+                                  />
+                                ) : (
+                                  <input
+                                    type="text"
+                                    value={plan.iterations?.toString() || '1'}
+                                    disabled
+                                    className="w-full px-3 py-2 border rounded text-sm bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
+                                  />
+                                )}
+                              </div>
+                              <div className="md:col-span-1 w-full">
+                                <div className="flex items-center justify-between gap-1 mb-2">
+                                  <div className="flex items-center gap-1">
+                                    <label className="block text-xs font-medium text-gray-600">Ramp up periods / VUs</label>
+                                    <Tooltip title="Configure virtual user ramp up over time. Leave empty if no ramp up is needed.">
+                                      <InfoIcon
+                                        fontSize="small"
+                                        className="text-gray-400 hover:text-gray-600 cursor-help"
+                                      />
+                                    </Tooltip>
+                                  </div>
+                                  {editingPlans.includes(plan.id) && rampUpPeriods.length === 0 && (
+                                    <button
+                                      onClick={addRampUpPeriod}
+                                      className="px-3 py-1 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                                    >
+                                      + Add Ramp Up Period
+                                    </button>
+                                  )}
+                                </div>
+                                {(() => {
+                                  const displayRampUpPeriods = editingPlans.includes(plan.id) 
+                                    ? rampUpPeriods 
+                                    : (plan.rampUpPeriods ? JSON.parse(plan.rampUpPeriods) : []);
+                                  
+                                  if (displayRampUpPeriods.length === 0) {
+                                    return <div className="text-xs text-gray-500 mb-2">No ramp up periods configured</div>;
+                                  }
+                                  
+                                  if (!editingPlans.includes(plan.id)) {
+                                    // View mode - show table with disabled inputs
+                                    return (
+                                      <div className="space-y-3">
+                                        {/* Table Header */}
+                                        <div className="grid grid-cols-12 gap-2 px-2 py-2 border-b border-gray-200">
+                                          <div className="col-span-3">
+                                            <label className="block text-xs font-semibold text-gray-700">Init Time</label>
+                                          </div>
+                                          <div className="col-span-3">
+                                            <label className="block text-xs font-semibold text-gray-700">End Time</label>
+                                          </div>
+                                          <div className="col-span-6">
+                                            <label className="block text-xs font-semibold text-gray-700">Virtual Users (VUs)</label>
+                                          </div>
+                                        </div>
+                                        {/* Table Rows - Disabled */}
+                                        {displayRampUpPeriods.map((period: any, index: number) => (
+                                          <div key={`view-${index}`} className="grid grid-cols-12 gap-2">
+                                            <input
+                                              type="text"
+                                              value={period.initTime || '0s'}
+                                              disabled
+                                              className="col-span-3 px-3 py-2 border rounded text-xs bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
+                                            />
+                                            <input
+                                              type="text"
+                                              value={period.endTime || '0s'}
+                                              disabled
+                                              className="col-span-3 px-3 py-2 border rounded text-xs bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
+                                            />
+                                            <input
+                                              type="text"
+                                              value={period.virtualUsers || '0'}
+                                              disabled
+                                              className="col-span-6 px-3 py-2 border rounded text-xs bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  }
+                                  
+                                  return null; // Edit mode will be rendered below
+                                })()}
+                                {editingPlans.includes(plan.id) && (
+                                  <div className="space-y-3">
+                                    {/* Table Header - Only show if there are periods */}
+                                    {rampUpPeriods.length > 0 && (
+                                      <div className="grid grid-cols-12 gap-2 px-2 py-2 border-b border-gray-200">
+                                        <div className="col-span-3">
+                                          <label className="block text-xs font-semibold text-gray-700">Init Time</label>
+                                        </div>
+                                        <div className="col-span-3">
+                                          <label className="block text-xs font-semibold text-gray-700">End Time</label>
+                                        </div>
+                                        <div className="col-span-5">
+                                          <label className="block text-xs font-semibold text-gray-700">Virtual Users (VUs)</label>
+                                        </div>
+                                        <div className="col-span-1"></div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Table Rows */}
+                                    {rampUpPeriods.map((period, index) => (
+                                      <div key={`edit-${index}`} className="grid grid-cols-12 gap-2">
+                                        <input
+                                          type="text"
+                                          placeholder="e.g., 0s"
+                                          value={period.initTime}
+                                          onChange={(e) => updateRampUpPeriod(index, 'initTime', e.target.value)}
+                                          className={`col-span-3 px-3 py-2 border rounded text-xs bg-white text-black ${!period.initTime || timePattern.test(period.initTime) ? 'border-gray-300' : 'border-red-500'}`}
+                                        />
+                                        <input
+                                          type="text"
+                                          placeholder="e.g., 30s"
+                                          value={period.endTime}
+                                          onChange={(e) => updateRampUpPeriod(index, 'endTime', e.target.value)}
+                                          className={`col-span-3 px-3 py-2 border rounded text-xs bg-white text-black ${!period.endTime || timePattern.test(period.endTime) ? 'border-gray-300' : 'border-red-500'}`}
+                                        />
+                                        <input
+                                          type="text"
+                                          placeholder="e.g., 10"
+                                          value={period.virtualUsers}
+                                          onChange={(e) => updateRampUpPeriod(index, 'virtualUsers', e.target.value)}
+                                          className={`col-span-5 px-3 py-2 border rounded text-xs bg-white text-black ${!period.virtualUsers || numberPattern.test(period.virtualUsers) ? 'border-gray-300' : 'border-red-500'}`}
+                                        />
+                                        <button
+                                          onClick={() => removeRampUpPeriod(index)}
+                                          className="col-span-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded p-2 flex items-center justify-center"
+                                          title="Delete this ramp up period"
+                                        >
+                                          <DeleteIcon fontSize="small" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                    
+                                    {rampUpPeriods.length > 0 && (
+                                      <div className="flex justify-end pt-2">
+                                        <button
+                                          onClick={addRampUpPeriod}
+                                          className="px-3 py-1 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                                        >
+                                          + Add Ramp Up Period
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                        </div>
+
+                        {/* Requests List */}
+                        <div className="border-t border-gray-100">
+                          <div className="flex justify-between items-center p-4 bg-gray-50 border-b border-gray-100">
+                            <h4 className="text-sm font-medium text-gray-700">Requests</h4>
+                            <button onClick={() => handleCreateNewRequest(plan.id)} className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm">
+                              New Request
+                            </button>
+                          </div>
+                          <SortableContext items={plan.testRequests.map(req => `request_${req.id}_${plan.id}`)} strategy={verticalListSortingStrategy}>
+                            {plan.testRequests.map((req) => {
+                              const reqKey = `${plan.id}-${req.id}`;
+                              const { baseUrl, queryParams } = parseEndpoint(req.endpoint);
+                              const truncatedBaseUrl = truncateText(baseUrl);
+                              const truncatedQueryParams = queryParams.map(([key, value]) => [key, truncateText(value)] as [string, string]);
+                              return (
+                                <SortableTestRequest
+                                  key={reqKey}
+                                  request={req}
+                                  planId={plan.id}
+                                  getMethodColor={getMethodColor}
+                                  onEdit={handleEditTestRequest}
+                                  onDelete={(requestId) => handleDeleteTestRequest(plan.id, requestId)}
+                                  isExpanded={expandedRequests.includes(req.id)}
+                                  onToggleExpansion={toggleRequestExpansion}
+                                  baseUrl={truncatedBaseUrl}
+                                  queryParams={truncatedQueryParams}
+                                  onClone={handleCloneTestRequest}
+                                  isEditable={true}
+                                />
+                              );
+                            })}
+                          </SortableContext>
+                        </div>
                       </div>
                     )}
                   </DroppablePlan>
@@ -768,10 +1212,10 @@ export default function ExecutionPlansPage() {
 
         {showForm && (
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 mb-6">
-            <h3 className="text-2xl font-semibold text-gray-800 mb-4">Create Execution Plan</h3>
+            <h3 className="text-2xl font-semibold text-gray-800 mb-4">Create a New Execution Plan</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-gray-700 font-medium mb-2">Execution Plan Name:</label>
+                <label className="block text-gray-700 font-medium mb-2">Name:</label>
                 <input
                   type="text"
                   value={planName}

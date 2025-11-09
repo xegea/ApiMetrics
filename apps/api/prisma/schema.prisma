@@ -81,6 +81,10 @@ model ExecutionPlan {
   tenantId    String   // Tenant ID for grouping users
   userId      String   // User who created the execution plan
   name        String   // Name of the execution plan
+  executionTime String? @default("1m") // e.g., "30s", "5m", "1h"
+  delayBetweenRequests String? @default("100ms") // e.g., "100ms", "1s"
+  iterations  Int?     @default(1) // Number of test iterations
+  rampUpPeriods String? // JSON array of ramp up periods: [{initTime, endTime, virtualUsers}, ...]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

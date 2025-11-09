@@ -123,10 +123,18 @@ export interface ExecutionPlan {
   createdAt: string;
   createdBy?: string;
   testRequests: TestRequest[];
+  executionTime?: string;
+  delayBetweenRequests?: string;
+  iterations?: number;
+  rampUpPeriods?: string;
 }
 
 export interface CreateExecutionPlanRequest {
   name: string;
+  executionTime?: string;
+  delayBetweenRequests?: string;
+  iterations?: number;
+  rampUpPeriods?: string;
 }
 
 export interface GetExecutionPlansResponse {
@@ -171,7 +179,11 @@ export async function deleteExecutionPlan(id: string): Promise<void> {
 }
 
 export interface UpdateExecutionPlanRequest {
-  name: string;
+  name?: string;
+  executionTime?: string;
+  delayBetweenRequests?: string;
+  iterations?: number;
+  rampUpPeriods?: string;
 }
 
 export interface UpdateTestRequestRequest {
