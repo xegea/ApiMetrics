@@ -19,3 +19,24 @@ export interface TestResult {
   timestamp: string;
 }
 
+/**
+ * A test request within an execution plan
+ */
+export interface TestRequest {
+  id: string;
+  endpoint: string;
+  httpMethod: string;
+  requestBody?: string;
+  headers?: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export interface CreateTestRequestRequest {
+  executionPlanId: string;
+  endpoint: string;
+  httpMethod: string;
+  requestBody?: string;
+  headers?: string;
+}
+

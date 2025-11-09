@@ -20,7 +20,8 @@ model Tenant {
   updatedAt  DateTime       @updatedAt
 
   users      User[]
-  endpoints  TestEndpoint[]
+  executionPlans ExecutionPlan[]
+  testRequests TestRequest[]
   results    TestResult[]
 
   @@map("tenants")
@@ -67,17 +68,37 @@ model User {
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
 
-  endpoints TestEndpoint[]
+  executionPlans ExecutionPlan[]
+  testRequests TestRequest[]
   results   TestResult[]
 
   @@index([tenantId])
   @@map("users")
 }
 
-model TestEndpoint {
+model ExecutionPlan {
   id          String   @id @default(uuid())
   tenantId    String   // Tenant ID for grouping users
-  userId      String   // User who created the endpoint
+  userId      String   // User who created the execution plan
+  name        String   // Name of the execution plan
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  testRequests TestRequest[]
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("execution_plans")
+}
+
+model TestRequest {
+  id          String   @id @default(uuid())
+  tenantId    String   // Tenant ID for grouping users
+  userId      String   // User who created the request
+  executionPlanId String // Execution plan this request belongs to
+  orderId     Int      @default(0) // Order within the execution plan
   endpoint    String   // Full URL like https://api.example.com/v1/health
   httpMethod  String   // GET, POST, PUT, DELETE, etc.
   requestBody String?  @db.Text // Request body/payload for POST/PUT/PATCH
@@ -87,9 +108,12 @@ model TestEndpoint {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   tenant Tenant @relation(fields: [tenantId], references: [id])
+  executionPlan ExecutionPlan @relation(fields: [executionPlanId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([userId])
+  @@index([executionPlanId])
+  @@index([executionPlanId, orderId])
   @@index([tenantId, endpoint, httpMethod])
-  @@map("test_endpoints")
+  @@map("test_requests")
 }

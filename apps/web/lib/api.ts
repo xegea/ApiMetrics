@@ -106,8 +106,8 @@ export async function seedResults(params?: { count?: number; project?: string })
   });
 }
 
-// Test Endpoints API
-export interface TestEndpoint {
+// Execution Plans API
+export interface TestRequest {
   id: string;
   endpoint: string;
   httpMethod: string;
@@ -117,38 +117,113 @@ export interface TestEndpoint {
   createdBy?: string;
 }
 
-export interface CreateTestEndpointRequest {
-  // tenantId is derived by the server; optional for backward-compat
-  tenantId?: string;
+export interface ExecutionPlan {
+  id: string;
+  name: string;
+  createdAt: string;
+  createdBy?: string;
+  testRequests: TestRequest[];
+}
+
+export interface CreateExecutionPlanRequest {
+  name: string;
+}
+
+export interface GetExecutionPlansResponse {
+  tenantId: string;
+  executionPlans: ExecutionPlan[];
+}
+
+export async function createExecutionPlan(data: CreateExecutionPlanRequest): Promise<ExecutionPlan> {
+  return fetchAPI<ExecutionPlan>('/executionplans', {
+    method: 'POST',
+    body: JSON.stringify(data),
+    requireAuth: true,
+  });
+}
+
+export async function getExecutionPlans(tenantId?: string): Promise<GetExecutionPlansResponse> {
+  const path = tenantId ? `/executionplans?tenantId=${encodeURIComponent(tenantId)}` : '/executionplans';
+  return fetchAPI<GetExecutionPlansResponse>(path, { requireAuth: true });
+}
+
+export interface CreateTestRequestRequest {
+  executionPlanId: string;
   endpoint: string;
   httpMethod: string;
   requestBody?: string;
   headers?: string;
 }
 
-export interface GetTestEndpointsResponse {
-  tenantId: string;
-  endpoints: TestEndpoint[];
-}
-
-export async function createTestEndpoint(data: CreateTestEndpointRequest): Promise<TestEndpoint> {
-  // Do not send tenantId if undefined; the API derives it from the authenticated user
-  const { tenantId, ...rest } = data;
-  return fetchAPI<TestEndpoint>('/endpoints', {
+export async function createTestRequest(data: CreateTestRequestRequest): Promise<TestRequest> {
+  return fetchAPI<TestRequest>('/executionplans/requests', {
     method: 'POST',
-    body: JSON.stringify(rest),
+    body: JSON.stringify(data),
     requireAuth: true,
   });
 }
 
-export async function getTestEndpoints(tenantId?: string): Promise<GetTestEndpointsResponse> {
-  const path = tenantId ? `/endpoints?tenantId=${encodeURIComponent(tenantId)}` : '/endpoints';
-  return fetchAPI<GetTestEndpointsResponse>(path, { requireAuth: true });
+export async function deleteExecutionPlan(id: string): Promise<void> {
+  return fetchAPI<void>(`/executionplans/${id}`, {
+    method: 'DELETE',
+    requireAuth: true,
+  });
 }
 
-export async function deleteTestEndpoint(id: string): Promise<void> {
-  return fetchAPI<void>(`/endpoints/${id}`, {
+export interface UpdateExecutionPlanRequest {
+  name: string;
+}
+
+export interface UpdateTestRequestRequest {
+  endpoint?: string;
+  httpMethod?: string;
+  requestBody?: string;
+  headers?: string;
+}
+
+export async function updateExecutionPlan(id: string, data: UpdateExecutionPlanRequest): Promise<ExecutionPlan> {
+  return fetchAPI<ExecutionPlan>(`/executionplans/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+    requireAuth: true,
+  });
+}
+
+export async function updateTestRequest(planId: string, requestId: string, data: UpdateTestRequestRequest): Promise<TestRequest> {
+  return fetchAPI<TestRequest>(`/executionplans/${planId}/requests/${requestId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+    requireAuth: true,
+  });
+}
+
+export async function deleteTestRequest(planId: string, requestId: string): Promise<void> {
+  return fetchAPI<void>(`/executionplans/${planId}/requests/${requestId}`, {
     method: 'DELETE',
+    requireAuth: true,
+  });
+}
+
+export interface ReorderTestRequestsRequest {
+  requestIds: string[];
+}
+
+export interface MoveTestRequestRequest {
+  newExecutionPlanId: string;
+}
+
+export async function reorderTestRequests(planId: string, data: ReorderTestRequestsRequest): Promise<void> {
+  return fetchAPI<void>(`/executionplans/${planId}/reorder`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+    requireAuth: true,
+  });
+}
+
+export async function moveTestRequest(planId: string, requestId: string, data: MoveTestRequestRequest): Promise<void> {
+  return fetchAPI<void>(`/executionplans/${planId}/requests/${requestId}/move`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
     requireAuth: true,
   });
 }

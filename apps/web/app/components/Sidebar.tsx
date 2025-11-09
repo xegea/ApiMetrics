@@ -19,10 +19,10 @@ const menuItems: MenuItem[] = [
     icon: '🏠',
   },
   {
-    label: 'Test Endpoints',
-    icon: '🔧',
+    label: 'Execution Plans',
+    icon: '�',
     children: [
-      { label: 'Endpoints List', href: '/endpoints' },
+      { label: 'Plans List', href: '/executionplans' },
       { label: 'Load Tests', href: '/load-tests' },
     ],
   },
