@@ -5,7 +5,6 @@ import { verifyToken } from './auth';
 import { ensureUserAndTenant } from '../services/tenancy';
 import { gunzip } from 'zlib';
 import { promisify } from 'util';
-import { randomUUID } from 'crypto';
 
 const gunzipAsync = promisify(gunzip);
 
@@ -36,8 +35,7 @@ async function postResults(
   request: FastifyRequest<{ Body: PostResultsBody | Buffer }>,
   reply: FastifyReply
 ) {
-  try {
-    let result: PostResultsBody;
+  let result: PostResultsBody;
 
     // Check if content is gzipped
     const contentType = request.headers['content-encoding'];
@@ -59,53 +57,41 @@ async function postResults(
       return reply.code(400).send({ error: 'Invalid test result data' });
     }
 
-    // Get user info - allow for development mode without auth
+    // Get user info - authentication is now required for POST
     let user = (request as any).user;
     let ensured: any;
     
     const isLocal = process.env.NODE_ENV === 'local' || process.env.NODE_ENV === 'development';
     
     if (!user?.userId) {
-      if (!isLocal) {
-        return reply.code(401).send({ error: 'Unauthorized' });
-      }
-      // In development, create/use a default test user if not authenticated
-      ensured = await ensureUserAndTenant({
-        userId: randomUUID(),
-        email: `dev-test-${randomUUID()}@localhost`,
-      });
-    } else {
-      ensured = await ensureUserAndTenant({
-        userId: user.userId,
-        email: user.email ?? 'unknown@example.com',
-      });
+      // This should not happen since POST requires auth, but fallback for safety
+      return reply.code(401).send({ error: 'Unauthorized' });
     }
-
-    // Save to database with tenant/user context
-    const saved = await prisma.testResult.upsert({
-      where: { testId: result.id },
-      update: ({
-        avgLatency: result.avgLatency,
-        p95Latency: result.p95Latency,
-        successRate: result.successRate,
-        timestamp: new Date(result.timestamp),
-      } as any),
-      create: ({
-        testId: result.id,
-        avgLatency: result.avgLatency,
-        p95Latency: result.p95Latency,
-        successRate: result.successRate,
-        timestamp: new Date(result.timestamp),
-        tenantId: ensured.tenantId,
-        userId: ensured.userId,
-      } as any),
+    
+    ensured = await ensureUserAndTenant({
+      userId: user.userId,
+      email: user.email ?? 'unknown@example.com',
     });
 
-    return reply.code(201).send({
-      id: saved.testId,
-      message: 'Test result saved successfully',
-    });
-  } catch (error) {
+    try {
+      // Save to database with tenant/user context
+      const saved = await prisma.testResult.create({
+        data: ({
+          testId: result.id,
+          avgLatency: result.avgLatency,
+          p95Latency: result.p95Latency,
+          successRate: result.successRate,
+          timestamp: new Date(result.timestamp),
+          tenantId: ensured.tenantId,
+          userId: ensured.userId,
+        } as any),
+      });
+
+      return reply.code(201).send({
+        id: saved.testId,
+        message: 'Test result saved successfully',
+      });
+    } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     request.log.error(error, 'Error saving test result');
     console.error('Error saving test result:', errorMessage);
@@ -131,6 +117,7 @@ async function getResults(
 
     const result = await prisma.testResult.findFirst({
       where: ({ testId: id, tenantId: ensured.tenantId } as any),
+      orderBy: { timestamp: 'desc' },
     });
 
     if (!result) {
@@ -190,15 +177,8 @@ async function listResults(
 }
 
 export async function resultsRoutes(fastify: FastifyInstance) {
-  // Allow unauthenticated POST for local development/testing
-  // In production, this should use verifyToken
-  const isLocal = process.env.NODE_ENV === 'local' || process.env.NODE_ENV === 'development';
-  
-  if (isLocal) {
-    fastify.post<{ Body: PostResultsBody | Buffer }>('/results', postResults);
-  } else {
-    fastify.post<{ Body: PostResultsBody | Buffer }>('/results', { preHandler: verifyToken }, postResults);
-  }
+  // POST requires authentication to prevent unauthorized submissions
+  fastify.post<{ Body: PostResultsBody | Buffer }>('/results', { preHandler: verifyToken }, postResults);
   
   fastify.get('/results', { preHandler: verifyToken }, listResults);
   fastify.get<{ Params: GetResultsParams }>('/results/:id', { preHandler: verifyToken }, getResults);

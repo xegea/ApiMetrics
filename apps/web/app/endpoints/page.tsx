@@ -5,7 +5,7 @@ import { createTestEndpoint, getTestEndpoints, TestEndpoint } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
 export default function TestEndpointsPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [tenantId, setTenantId] = useState('');
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
   const [endpoints, setEndpoints] = useState<TestEndpoint[]>([]);
@@ -147,6 +147,26 @@ export default function TestEndpointsPage() {
         <h1 className="text-4xl font-bold text-gray-800 text-center mb-8">
           Test Server Endpoints
         </h1>
+
+        {/* JWT Token Button */}
+        <div className="text-center mb-6">
+          <button
+            onClick={() => {
+              if (session?.access_token) {
+                navigator.clipboard.writeText(session.access_token);
+                alert('JWT Token copied to clipboard!');
+              } else {
+                alert('No active session found. Please log in.');
+              }
+            }}
+            className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium"
+          >
+            Copy JWT Token for Postman
+          </button>
+          <p className="text-sm text-gray-600 mt-2">
+            Use this token in Postman's Authorization header (Bearer Token) to authenticate test result uploads under your tenant.
+          </p>
+        </div>
 
         {/* Loading */}
         {loading && (

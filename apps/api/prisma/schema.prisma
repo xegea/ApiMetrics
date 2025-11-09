@@ -34,7 +34,7 @@ enum Role {
 
 model TestResult {
   id           String   @id @default(uuid())
-  testId       String   @unique
+  testId       String
   avgLatency   Float
   p95Latency   Float
   successRate  Float
