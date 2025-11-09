@@ -1,9 +1,14 @@
 'use client';
 
+import React from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
+import HomeIcon from '@mui/icons-material/Home';
+import FolderIcon from '@mui/icons-material/Folder';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import BoltIcon from '@mui/icons-material/Bolt';
 
 interface MenuItem {
   label: string;
@@ -12,15 +17,22 @@ interface MenuItem {
   icon?: string;
 }
 
+const iconMap = {
+  home: HomeIcon,
+  folder: FolderIcon,
+  barChart: BarChartIcon,
+  bolt: BoltIcon,
+};
+
 const menuItems: MenuItem[] = [
   {
     label: 'Home',
     href: '/',
-    icon: '🏠',
+    icon: 'home',
   },
   {
     label: 'Execution Plans',
-    icon: '�',
+    icon: 'folder',
     children: [
       { label: 'Plans List', href: '/executionplans' },
       { label: 'Load Tests', href: '/load-tests' },
@@ -28,7 +40,7 @@ const menuItems: MenuItem[] = [
   },
   {
     label: 'Metrics',
-    icon: '📊',
+    icon: 'barChart',
     children: [
       { label: 'Dashboard', href: '/dashboard' },
     ],
@@ -66,7 +78,7 @@ export function Sidebar() {
       {/* Logo/Title in normal flow */}
       <div className="mb-8 pb-4 border-b border-gray-700">
         <Link href="/" className="flex items-center gap-2 group">
-          <span className={logoIconClass}>⚡</span>
+          <BoltIcon className={logoIconClass} />
           <span className={logoTextClass + ' group-hover:text-blue-400 transition'}>ApiMetrics</span>
         </Link>
       </div>
@@ -85,7 +97,10 @@ export function Sidebar() {
                     : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                 }`}
               >
-                <span className="text-lg">{item.icon}</span>
+                {item.icon && (() => {
+                  const IconComponent = iconMap[item.icon as keyof typeof iconMap];
+                  return <IconComponent className="text-lg" />;
+                })()}
                 <span className="font-semibold text-gray-200">{item.label}</span>
               </Link>
             )}
@@ -98,7 +113,10 @@ export function Sidebar() {
                   className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-800 transition text-left"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">{item.icon}</span>
+                    {item.icon && (() => {
+                      const IconComponent = iconMap[item.icon as keyof typeof iconMap];
+                      return <IconComponent className="text-lg" />;
+                    })()}
                     <span className="font-semibold text-gray-200">{item.label}</span>
                   </div>
                   <svg

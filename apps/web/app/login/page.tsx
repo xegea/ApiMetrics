@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import Link from 'next/link';
+import BoltIcon from '@mui/icons-material/Bolt';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function LoginPage() {
       {/* Logo at top left, fixed position */}
       <div className="absolute top-0 left-0 p-6 z-20">
         <Link href="/" className="flex items-center gap-2 group">
-          <span className="text-3xl text-blue-600">⚡</span>
+          <BoltIcon className="text-3xl text-blue-600" />
           <span className="text-2xl font-bold text-blue-700 group-hover:text-blue-400 transition">ApiMetrics</span>
         </Link>
       </div>
@@ -48,7 +49,7 @@ export default function LoginPage() {
         {/* Logo/Title linking to home (centered for mobile) */}
         <div className="flex flex-col items-center mb-2 md:hidden">
           <Link href="/" className="flex items-center gap-2 group">
-            <span className="text-3xl text-blue-600">⚡</span>
+            <BoltIcon className="text-3xl text-blue-600" />
             <span className="text-2xl font-bold text-blue-700 group-hover:text-blue-400 transition">ApiMetrics</span>
           </Link>
         </div>

@@ -3,6 +3,22 @@
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
+import AnalyticsIcon from '@mui/icons-material/Analytics';
+import BuildIcon from '@mui/icons-material/Build';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import LockIcon from '@mui/icons-material/Lock';
+import BoltIcon from '@mui/icons-material/Bolt';
+import CheckIcon from '@mui/icons-material/Check';
+
+const iconMap = {
+  rocket: RocketLaunchIcon,
+  analytics: AnalyticsIcon,
+  build: BuildIcon,
+  trendingUp: TrendingUpIcon,
+  lock: LockIcon,
+  bolt: BoltIcon,
+};
 
 export default function Home() {
   const { user } = useAuth();
@@ -10,32 +26,32 @@ export default function Home() {
 
   const features = [
     {
-      icon: '🚀',
+      icon: 'rocket',
       title: 'Load Testing',
       description: 'Run performance tests on your APIs with configurable load patterns and concurrent users.'
     },
     {
-      icon: '📊',
+      icon: 'analytics',
       title: 'Real-time Metrics',
       description: 'Monitor latency, throughput, success rates, and error patterns in real-time dashboards.'
     },
     {
-      icon: '🔧',
+      icon: 'build',
       title: 'Endpoint Management',
       description: 'Easily manage and organize your test endpoints with support for all HTTP methods.'
     },
     {
-      icon: '📈',
+      icon: 'trendingUp',
       title: 'Performance Analytics',
       description: 'Deep insights into P95, P99 latency, and performance trends over time.'
     },
     {
-      icon: '🔒',
+      icon: 'lock',
       title: 'Multi-tenant Support',
       description: 'Organize tests by tenant with secure isolation and role-based access control.'
     },
     {
-      icon: '⚡',
+      icon: 'bolt',
       title: 'Fast & Reliable',
       description: 'Built on modern infrastructure for lightning-fast test execution and accurate results.'
     }
@@ -94,7 +110,7 @@ export default function Home() {
       {!user && (
         <div className="absolute top-0 left-0 p-6 z-20">
           <Link href="/" className="flex items-center gap-2 group">
-            <span className="text-3xl text-blue-600">⚡</span>
+            <BoltIcon className="text-3xl text-blue-600" />
             <span className="text-2xl font-bold text-blue-700 group-hover:text-blue-400 transition">ApiMetrics</span>
           </Link>
         </div>
@@ -104,7 +120,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="text-center">
             <div className="flex justify-center mb-6">
-              <span className="text-8xl">⚡</span>
+              <BoltIcon className="text-8xl text-blue-600" />
             </div>
             <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
               API Load Testing
@@ -168,7 +184,12 @@ export default function Home() {
               key={index}
               className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition border border-gray-100"
             >
-              <div className="text-5xl mb-4">{feature.icon}</div>
+              <div className="text-5xl mb-4 text-blue-600">
+                {(() => {
+                  const IconComponent = iconMap[feature.icon as keyof typeof iconMap];
+                  return <IconComponent fontSize="inherit" />;
+                })()}
+              </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-3">
                 {feature.title}
               </h3>
@@ -218,9 +239,7 @@ export default function Home() {
                 <ul className="space-y-4 mb-8">
                   {plan.features.map((feature, fIndex) => (
                     <li key={fIndex} className="flex items-start gap-3">
-                      <span className={`text-xl ${plan.highlighted ? 'text-blue-200' : 'text-green-500'}`}>
-                        ✓
-                      </span>
+                      <CheckIcon className={`text-xl ${plan.highlighted ? 'text-blue-200' : 'text-green-500'}`} />
                       <span className={plan.highlighted ? 'text-blue-50' : 'text-gray-700'}>
                         {feature}
                       </span>
@@ -268,7 +287,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-3xl">⚡</span>
+                <BoltIcon className="text-3xl text-blue-600" />
                 <span className="text-2xl font-bold text-blue-700">ApiMetrics</span>
               </div>
               <p className="text-gray-400">
