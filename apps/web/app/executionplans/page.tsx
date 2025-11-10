@@ -572,6 +572,10 @@ export default function ExecutionPlansPage() {
     }
   };
 
+  const cancelPlanEditMode = (planId: string) => {
+    setEditingPlans(prev => prev.filter(id => id !== planId));
+  };
+
   const togglePlanEditMode = async (planId: string) => {
     const isCurrentlyEditing = editingPlans.includes(planId);
     
@@ -782,33 +786,47 @@ export default function ExecutionPlansPage() {
                         <div className="border-t border-gray-100 p-4 bg-gray-50">
                           <div className="flex items-center justify-between mb-3">
                             <h4 className="text-sm font-medium text-gray-700">Execution Configuration</h4>
-                            <button 
-                              onClick={() => togglePlanEditMode(plan.id)}
-                              disabled={(editingPlans.includes(plan.id) && !isValidConfiguration()) || savingPlans.includes(plan.id)}
-                              className={`px-3 py-1 rounded text-sm font-medium ${
-                                savingPlans.includes(plan.id)
-                                  ? 'bg-gray-500 text-white cursor-not-allowed'
-                                  : editingPlans.includes(plan.id) 
-                                    ? isValidConfiguration()
-                                      ? 'bg-green-500 text-white hover:bg-green-600' 
-                                      : 'bg-gray-400 text-white cursor-not-allowed'
-                                    : 'bg-blue-500 text-white hover:bg-blue-600'
-                              }`}
-                              title={
-                                savingPlans.includes(plan.id) 
-                                  ? 'Saving...' 
-                                  : editingPlans.includes(plan.id) && !isValidConfiguration() 
-                                    ? 'Please fix validation errors' 
-                                    : ''
-                              }
-                            >
-                              {savingPlans.includes(plan.id) 
-                                ? 'Saving...' 
-                                : editingPlans.includes(plan.id) 
-                                  ? 'Save' 
-                                  : 'Edit'
-                              }
-                            </button>
+                            <div className="flex gap-2">
+                              {editingPlans.includes(plan.id) ? (
+                                <>
+                                  <button 
+                                    onClick={() => togglePlanEditMode(plan.id)}
+                                    disabled={!isValidConfiguration() || savingPlans.includes(plan.id)}
+                                    className={`px-3 py-1 rounded text-sm font-medium ${
+                                      savingPlans.includes(plan.id)
+                                        ? 'bg-gray-500 text-white cursor-not-allowed'
+                                        : isValidConfiguration()
+                                          ? 'bg-green-500 text-white hover:bg-green-600' 
+                                          : 'bg-gray-400 text-white cursor-not-allowed'
+                                    }`}
+                                    title={
+                                      savingPlans.includes(plan.id) 
+                                        ? 'Saving...' 
+                                        : !isValidConfiguration() 
+                                          ? 'Please fix validation errors' 
+                                          : ''
+                                    }
+                                  >
+                                    {savingPlans.includes(plan.id) ? 'Saving...' : 'Save'}
+                                  </button>
+                                  <button 
+                                    onClick={() => cancelPlanEditMode(plan.id)}
+                                    disabled={savingPlans.includes(plan.id)}
+                                    className="px-3 py-1 rounded text-sm font-medium bg-gray-500 text-white hover:bg-gray-600 disabled:cursor-not-allowed"
+                                    title="Cancel changes"
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <button 
+                                  onClick={() => togglePlanEditMode(plan.id)}
+                                  className="px-3 py-1 rounded text-sm font-medium bg-blue-500 text-white hover:bg-blue-600"
+                                >
+                                  Edit
+                                </button>
+                              )}
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
