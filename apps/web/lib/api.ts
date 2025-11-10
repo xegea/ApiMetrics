@@ -1,4 +1,4 @@
-import { TestResult } from '@apimetrics/shared';
+import { TestResult, LoadTestExecution } from '@apimetrics/shared';
 import { supabase } from './supabase';
 
 const API_URL = process.env.NEXT_PUBLIC_APIMETRICS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -236,6 +236,55 @@ export async function moveTestRequest(planId: string, requestId: string, data: M
   return fetchAPI<void>(`/executionplans/${planId}/requests/${requestId}/move`, {
     method: 'PUT',
     body: JSON.stringify(data),
+    requireAuth: true,
+  });
+}
+
+export interface CreateLoadTestExecutionRequest {
+  executionPlanId: string;
+  name: string;
+}
+
+export interface GetLoadTestExecutionsResponse {
+  loadTestExecutions: LoadTestExecution[];
+}
+
+export async function createLoadTestExecution(data: CreateLoadTestExecutionRequest): Promise<LoadTestExecution> {
+  return fetchAPI<LoadTestExecution>('/loadtestexecutions', {
+    method: 'POST',
+    body: JSON.stringify(data),
+    requireAuth: true,
+  });
+}
+
+export async function getLoadTestExecutions(executionPlanId?: string): Promise<GetLoadTestExecutionsResponse> {
+  const url = executionPlanId 
+    ? `/loadtestexecutions?executionPlanId=${executionPlanId}` 
+    : '/loadtestexecutions';
+  return fetchAPI<GetLoadTestExecutionsResponse>(url, {
+    method: 'GET',
+    requireAuth: true,
+  });
+}
+
+export async function getLoadTestExecution(id: string): Promise<LoadTestExecution> {
+  return fetchAPI<LoadTestExecution>(`/loadtestexecutions/${id}`, {
+    method: 'GET',
+    requireAuth: true,
+  });
+}
+
+export async function updateLoadTestExecution(id: string, data: Partial<LoadTestExecution>): Promise<LoadTestExecution> {
+  return fetchAPI<LoadTestExecution>(`/loadtestexecutions/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+    requireAuth: true,
+  });
+}
+
+export async function deleteLoadTestExecution(id: string): Promise<void> {
+  return fetchAPI<void>(`/loadtestexecutions/${id}`, {
+    method: 'DELETE',
     requireAuth: true,
   });
 }

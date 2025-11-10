@@ -40,3 +40,15 @@ export interface CreateTestRequestRequest {
   headers?: string;
 }
 
+/**
+ * A load test execution
+ */
+export interface LoadTestExecution {
+  id: string;
+  executionPlanId: string;
+  name: string;
+  status: 'running' | 'completed' | 'failed';
+  createdAt: string;
+  updatedAt: string;
+}
+

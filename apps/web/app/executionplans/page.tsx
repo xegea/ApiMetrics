@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createExecutionPlan, getExecutionPlans, createTestRequest, ExecutionPlan, TestRequest, reorderTestRequests, moveTestRequest, deleteExecutionPlan, deleteTestRequest, updateExecutionPlan, updateTestRequest } from '@/lib/api';
+import { createExecutionPlan, getExecutionPlans, createTestRequest, ExecutionPlan, TestRequest, reorderTestRequests, moveTestRequest, deleteExecutionPlan, deleteTestRequest, updateExecutionPlan, updateTestRequest, createLoadTestExecution } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
+import BorderColorIcon from '@mui/icons-material/BorderColor';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import FolderIcon from '@mui/icons-material/Folder';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -96,7 +96,7 @@ function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete
             <div className="w-4 h-0.5 bg-gray-400 mb-1"></div>
             <div className="w-4 h-0.5 bg-gray-400"></div>
           </div>
-          <span className={`${getMethodColor(request.httpMethod)} text-white px-3 py-1 rounded font-bold text-sm w-16 text-center`}>
+          <span className={`${getMethodColor(request.httpMethod)} text-white px-3 py-1 rounded font-bold text-sm ${['DELETE', 'PATCH'].includes(request.httpMethod) ? 'w-20' : 'w-16'} text-center`}>
             {request.httpMethod}
           </span>
           <span className="text-md font-medium text-gray-800">{baseUrl}</span>
@@ -115,7 +115,7 @@ function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete
             }`} 
             title={isEditable ? "Edit" : "Enable edit mode to modify"}
           >
-            <EditIcon fontSize="small" />
+            <BorderColorIcon fontSize="small" />
           </button>
           <button 
             onClick={(e) => { e.stopPropagation(); onClone(request, planId); }} 
@@ -139,7 +139,7 @@ function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete
             }`} 
             title={isEditable ? "Delete" : "Enable edit mode to delete"}
           >
-            <DeleteIcon fontSize="small" />
+            <DeleteOutlineIcon fontSize="small" />
           </button>
         </div>
       </div>
@@ -194,7 +194,6 @@ export default function ExecutionPlansPage() {
   const [expandedPlans, setExpandedPlans] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeItem, setActiveItem] = useState<{ type: 'request'; request: TestRequest; planId: string } | null>(null);
-  const [showPlanMenu, setShowPlanMenu] = useState<string | null>(null);
   const [renamingPlan, setRenamingPlan] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [editingRequest, setEditingRequest] = useState<TestRequest | null>(null);
@@ -332,6 +331,21 @@ export default function ExecutionPlansPage() {
     }
   };
 
+  const handleRunLoadTest = async (plan: ExecutionPlan) => {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const name = `${plan.name} - ${timestamp}`;
+      await createLoadTestExecution({
+        executionPlanId: plan.id,
+        name,
+      });
+      // Navigate to load tests executions page where the new execution will be auto-expanded
+      window.location.href = '/load-tests-executions';
+    } catch (error) {
+      alert('Error creating load test execution: ' + (error as Error).message);
+    }
+  };
+
   const handleRenameExecutionPlan = async (planId: string) => {
     if (!renameValue.trim()) { alert('Name cannot be empty'); return; }
     try {
@@ -339,7 +353,6 @@ export default function ExecutionPlansPage() {
       await listExecutionPlans();
       setRenamingPlan(null);
       setRenameValue('');
-      setShowPlanMenu(null);
     } catch (error) {
       alert('Error: ' + (error as Error).message);
     }
@@ -728,7 +741,7 @@ export default function ExecutionPlansPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-4xl font-bold text-gray-800 text-center mb-8">Execution Plans</h1>
+        <h1 className="text-4xl font-bold text-gray-800 text-center mb-8">Load Tests Plans</h1>
 
         <div className="text-center mb-6">
           <button onClick={() => {
@@ -773,24 +786,17 @@ export default function ExecutionPlansPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
+                        <button onClick={(e) => { e.stopPropagation(); handleRunLoadTest(plan); }} className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600 flex items-center gap-1" title="Go to Run Load Tests">
+                          <PlayCircleIcon fontSize="small" />
+                          <span>Go to Run Load Tests</span>
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); setRenamingPlan(plan.id); setRenameValue(plan.name); }} className="p-1 rounded text-gray-600 hover:text-blue-600 hover:bg-blue-50" title="Rename">
+                          <BorderColorIcon fontSize="small" />
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteExecutionPlan(plan.id); }} className="p-1 rounded text-gray-600 hover:text-red-600 hover:bg-red-50" title="Delete">
+                          <DeleteOutlineIcon fontSize="small" />
+                        </button>
                         <ChevronRightIcon className={`transform transition-transform cursor-pointer text-gray-600 hover:text-gray-800 ${expandedPlans.includes(planKey) ? 'rotate-90' : ''}`} onClick={() => togglePlan(planKey)} />
-                        <div className="relative">
-                          <button onClick={(e) => { e.stopPropagation(); setShowPlanMenu(showPlanMenu === plan.id ? null : plan.id); }} className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded">
-                            <MoreVertIcon />
-                          </button>
-                          {showPlanMenu === plan.id && (
-                            <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-300 rounded-lg shadow-lg z-50">
-                              <button onClick={(e) => { e.stopPropagation(); setRenamingPlan(plan.id); setRenameValue(plan.name); setShowPlanMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                                <EditIcon fontSize="small" />
-                                Rename
-                              </button>
-                              <button onClick={(e) => { e.stopPropagation(); handleDeleteExecutionPlan(plan.id); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
-                                <DeleteIcon fontSize="small" />
-                                Delete
-                              </button>
-                            </div>
-                          )}
-                        </div>
                       </div>
                     </div>
 
@@ -1084,7 +1090,7 @@ export default function ExecutionPlansPage() {
                                                   className="col-span-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded p-2 flex items-center justify-center"
                                                   title="Delete this ramp up period"
                                                 >
-                                                  <DeleteIcon fontSize="small" />
+                                                  <DeleteOutlineIcon fontSize="small" />
                                                 </button>
                                               </div>
                                             ))}
@@ -1149,7 +1155,7 @@ export default function ExecutionPlansPage() {
               {activeItem && activeItem.type === 'request' && (
                 <div className="ml-8 mr-4 mb-4 mt-4 bg-white border border-gray-300 rounded-lg p-4 shadow-md">
                   <div className="flex items-center gap-4">
-                    <span className={`${getMethodColor(activeItem.request.httpMethod)} text-white px-3 py-1 rounded font-bold text-sm w-16 text-center`}>
+                    <span className={`${getMethodColor(activeItem.request.httpMethod)} text-white px-3 py-1 rounded font-bold text-sm ${['DELETE', 'PATCH'].includes(activeItem.request.httpMethod) ? 'w-20' : 'w-16'} text-center`}>
                       {activeItem.request.httpMethod}
                     </span>
                     <span className="text-md font-medium text-gray-800">{(() => {

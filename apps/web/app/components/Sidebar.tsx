@@ -31,11 +31,11 @@ const menuItems: MenuItem[] = [
     icon: 'home',
   },
   {
-    label: 'Execution Plans',
+    label: 'Load Tests',
     icon: 'folder',
     children: [
-      { label: 'Plans List', href: '/executionplans' },
-      { label: 'Load Tests', href: '/load-tests' },
+      { label: 'Load Tests Plans', href: '/executionplans' },
+      { label: 'Load Tests Executions', href: '/load-tests-executions' },
     ],
   },
   {
