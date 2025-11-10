@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getLoadTestExecutions } from '@/lib/api';
-import { LoadTestExecution } from '@apimetrics/shared';
+import { getLoadTestExecutions, getLoadTestExecutionResults } from '@/lib/api';
+import { LoadTestExecution, TestResult } from '@apimetrics/shared';
 import { useAuth } from '@/lib/auth';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -14,6 +14,7 @@ export default function LoadTestsExecutionsPage() {
   const [loading, setLoading] = useState(false);
   const [loadTestExecutions, setLoadTestExecutions] = useState<LoadTestExecution[]>([]);
   const [expandedExecutions, setExpandedExecutions] = useState<string[]>([]);
+  const [executionResults, setExecutionResults] = useState<Record<string, TestResult[]>>({});
 
   useEffect(() => {
     if (session?.user?.email) {
@@ -43,12 +44,27 @@ export default function LoadTestsExecutionsPage() {
     }
   };
 
-  const toggleExecution = (executionId: string) => {
+  const toggleExecution = async (executionId: string) => {
+    const isExpanding = !expandedExecutions.includes(executionId);
+    
     setExpandedExecutions(prev =>
       prev.includes(executionId)
         ? prev.filter(id => id !== executionId)
         : [...prev, executionId]
     );
+
+    // Fetch results when expanding
+    if (isExpanding && !executionResults[executionId]) {
+      try {
+        const response = await getLoadTestExecutionResults(executionId);
+        setExecutionResults(prev => ({
+          ...prev,
+          [executionId]: response.testResults,
+        }));
+      } catch (error) {
+        console.error('Failed to fetch execution results:', error);
+      }
+    }
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -90,6 +106,52 @@ export default function LoadTestsExecutionsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          const token = session?.access_token;
+                          if (!token) {
+                            alert('You must be logged in to download executions');
+                            return;
+                          }
+
+                          // Create a temporary link element for download
+                          const link = document.createElement('a');
+                          link.href = `${process.env.NEXT_PUBLIC_APIMETRICS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/loadtestexecutions/${execution.id}/download`;
+                          link.style.display = 'none';
+                          link.target = '_blank'; // Open in new tab to avoid CORS issues
+
+                          // For authenticated requests, we need to use fetch
+                          const response = await fetch(link.href, {
+                            method: 'GET',
+                            headers: {
+                              'Authorization': `Bearer ${token}`,
+                            },
+                          });
+
+                          if (!response.ok) {
+                            throw new Error(`Download failed: ${response.status}`);
+                          }
+
+                          const blob = await response.blob();
+                          const url = window.URL.createObjectURL(blob);
+                          const downloadLink = document.createElement('a');
+                          downloadLink.href = url;
+                          downloadLink.download = `Execution Plan ${execution.name}.zip`;
+                          document.body.appendChild(downloadLink);
+                          downloadLink.click();
+                          document.body.removeChild(downloadLink);
+                          window.URL.revokeObjectURL(url);
+                        } catch (error) {
+                          console.error('Download failed:', error);
+                          alert('Failed to download execution. Please try again.');
+                        }
+                      }}
+                      className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors"
+                    >
+                      Download Execution
+                    </button>
                     <ChevronRightIcon className={`transform transition-transform cursor-pointer text-gray-600 hover:text-gray-800 ${
                       expandedExecutions.includes(execution.id) ? 'rotate-90' : ''
                     }`} onClick={() => toggleExecution(execution.id)} />
@@ -98,46 +160,93 @@ export default function LoadTestsExecutionsPage() {
 
                 {expandedExecutions.includes(execution.id) && (
                   <div className="border-t border-gray-100 p-6 space-y-6">
-                    {/* Empty Graph Section */}
-                    <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
-                      <div className="text-gray-400 mb-2">
-                        <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-medium text-gray-600 mb-2">Execution Timeline</h3>
-                      <p className="text-gray-500">Graph showing test execution over time will appear here</p>
-                    </div>
+                    {/* Execution Results */}
+                    {executionResults[execution.id] ? (
+                      <>
+                        {/* Metrics Section */}
+                        <div className="bg-white border border-gray-200 rounded-lg p-6">
+                          <h3 className="text-lg font-medium text-gray-900 mb-4">Execution Metrics</h3>
+                          {executionResults[execution.id].length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                              <div className="text-center">
+                                <div className="text-2xl font-bold text-blue-600">
+                                  {(executionResults[execution.id].reduce((sum, r) => sum + r.avgLatency, 0) / executionResults[execution.id].length / 1000000).toFixed(2)}ms
+                                </div>
+                                <div className="text-sm text-gray-500">Avg Response Time</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-2xl font-bold text-blue-600">
+                                  {(executionResults[execution.id].reduce((sum, r) => sum + r.p95Latency, 0) / executionResults[execution.id].length / 1000000).toFixed(2)}ms
+                                </div>
+                                <div className="text-sm text-gray-500">P95 Response Time</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-2xl font-bold text-green-600">
+                                  {((executionResults[execution.id].reduce((sum, r) => sum + r.successRate, 0) / executionResults[execution.id].length) * 100).toFixed(1)}%
+                                </div>
+                                <div className="text-sm text-gray-500">Success Rate</div>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 text-center">No results available yet</p>
+                          )}
+                        </div>
 
-                    {/* Empty Metrics Section */}
-                    <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg p-8">
-                      <h3 className="text-lg font-medium text-gray-600 mb-4 text-center">Execution Metrics</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-gray-400">--</div>
-                          <div className="text-sm text-gray-500">Avg Response Time</div>
+                        {/* Test Results Table */}
+                        <div className="bg-white border border-gray-200 rounded-lg p-6">
+                          <h3 className="text-lg font-medium text-gray-900 mb-4">Test Results</h3>
+                          {executionResults[execution.id].length > 0 ? (
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test ID</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Latency</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P95 Latency</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Success Rate</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {executionResults[execution.id].map((result) => (
+                                    <tr key={result.id}>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        {result.testId}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {new Date(result.timestamp).toLocaleString()}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {(result.avgLatency / 1000000).toFixed(2)}ms
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {(result.p95Latency / 1000000).toFixed(2)}ms
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                          result.successRate >= 0.95 ? 'bg-green-100 text-green-800' :
+                                          result.successRate >= 0.8 ? 'bg-yellow-100 text-yellow-800' :
+                                          'bg-red-100 text-red-800'
+                                        }`}>
+                                          {(result.successRate * 100).toFixed(1)}%
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 text-center">No test results found. Run the downloaded tests with the CLI to see results here.</p>
+                          )}
                         </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-gray-400">--</div>
-                          <div className="text-sm text-gray-500">P95 Response Time</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-gray-400">--</div>
-                          <div className="text-sm text-gray-500">Success Rate</div>
-                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="text-gray-500 mt-2">Loading execution results...</p>
                       </div>
-                    </div>
-
-                    {/* Empty Requests Section */}
-                    <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
-                      <div className="text-gray-400 mb-2">
-                        <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-medium text-gray-600 mb-2">Executed Requests</h3>
-                      <p className="text-gray-500">List of executed requests and their results will appear here</p>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -274,6 +274,17 @@ export async function getLoadTestExecution(id: string): Promise<LoadTestExecutio
   });
 }
 
+export interface GetLoadTestExecutionResultsResponse {
+  testResults: TestResult[];
+}
+
+export async function getLoadTestExecutionResults(id: string): Promise<GetLoadTestExecutionResultsResponse> {
+  return fetchAPI<GetLoadTestExecutionResultsResponse>(`/loadtestexecutions/${id}/results`, {
+    method: 'GET',
+    requireAuth: true,
+  });
+}
+
 export async function updateLoadTestExecution(id: string, data: Partial<LoadTestExecution>): Promise<LoadTestExecution> {
   return fetchAPI<LoadTestExecution>(`/loadtestexecutions/${id}`, {
     method: 'PUT',

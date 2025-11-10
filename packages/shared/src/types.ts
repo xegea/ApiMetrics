@@ -13,6 +13,7 @@ export interface TestConfig {
  */
 export interface TestResult {
   id: string;
+  testId: string;
   avgLatency: number;
   p95Latency: number;
   successRate: number;
@@ -41,13 +42,17 @@ export interface CreateTestRequestRequest {
 }
 
 /**
- * A load test execution
+ * A load test execution with optional result fields
  */
 export interface LoadTestExecution {
   id: string;
   executionPlanId: string;
   name: string;
   status: 'running' | 'completed' | 'failed';
+  avgLatency?: number; // Average latency in nanoseconds
+  p95Latency?: number; // P95 latency in nanoseconds
+  successRate?: number; // Success rate as decimal (0-1)
+  resultTimestamp?: string; // Timestamp of when results were recorded
   createdAt: string;
   updatedAt: string;
 }
