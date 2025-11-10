@@ -145,20 +145,22 @@ function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete
       </div>
       
       {isExpanded && (
-        <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">HTTP Method:</label>
-            <span className={`${getMethodColor(request.httpMethod)} text-white px-3 py-1 rounded font-bold text-sm`}>{request.httpMethod}</span>
+        <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
+          <div className="flex items-start gap-3">
+            <code className="text-sm text-gray-700 font-mono flex-1 bg-gray-50 p-2.5 rounded border border-gray-200 overflow-x-auto break-all leading-relaxed"><span className="font-bold text-blue-600">{request.httpMethod}</span> {request.endpoint}</code>
           </div>
           
           {queryParams.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Query Parameters:</label>
-              <div className="bg-gray-100 p-3 rounded text-sm">
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 p-4 rounded-lg">
+              <h4 className="text-xs font-semibold text-blue-900 uppercase tracking-wide mb-3">Query Parameters</h4>
+              <div className="space-y-2">
                 {queryParams.map(([key, value]) => (
-                  <div key={key} className="flex gap-2">
-                    <span className="font-medium text-blue-600">{key}:</span>
-                    <span className="text-gray-800">{value}</span>
+                  <div key={key} style={{ width: '100%', overflowX: 'auto', backgroundColor: 'white', borderRadius: '0.375rem', border: '1px solid #dbeafe', padding: '0.5rem' }}>
+                    <code style={{ color: '#374151', fontFamily: 'monospace', fontSize: '0.75rem', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                      <span style={{ fontWeight: 'bold', color: '#1d4ed8' }}>{key}</span>
+                      <span style={{ color: '#4b5563' }}> = </span>
+                      <span>{value}</span>
+                    </code>
                   </div>
                 ))}
               </div>
@@ -166,16 +168,16 @@ function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete
           )}
           
           {request.headers && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Headers:</label>
-              <pre className="bg-gray-100 p-3 rounded text-sm text-gray-800 whitespace-pre-wrap overflow-x-auto">{request.headers}</pre>
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 p-4 rounded-lg">
+              <h4 className="text-xs font-semibold text-amber-900 uppercase tracking-wide mb-3">Headers</h4>
+              <pre className="text-xs text-gray-700 font-mono bg-white p-2.5 rounded border border-amber-100 overflow-x-auto max-h-32 whitespace-pre-wrap break-words leading-relaxed">{request.headers}</pre>
             </div>
           )}
           
           {request.requestBody && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Request Body:</label>
-              <pre className="bg-gray-100 p-3 rounded text-sm text-gray-800 whitespace-pre-wrap overflow-x-auto">{request.requestBody}</pre>
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 p-4 rounded-lg">
+              <h4 className="text-xs font-semibold text-purple-900 uppercase tracking-wide mb-3">Request Body</h4>
+              <pre className="text-xs text-gray-700 font-mono bg-white p-2.5 rounded border border-purple-100 overflow-x-auto max-h-40 whitespace-pre-wrap break-words leading-relaxed">{request.requestBody}</pre>
             </div>
           )}
         </div>
@@ -214,6 +216,7 @@ export default function ExecutionPlansPage() {
   const [rampUpPeriods, setRampUpPeriods] = useState<Array<{initTime: string, endTime: string, virtualUsers: string}>>([]);
   const [editingPlans, setEditingPlans] = useState<string[]>([]);
   const [savingPlans, setSavingPlans] = useState<string[]>([]);
+  const [expandedAdvancedSettings, setExpandedAdvancedSettings] = useState<string[]>([]);
 
   const parseEndpoint = (endpoint: string) => {
     try {
@@ -620,8 +623,19 @@ export default function ExecutionPlansPage() {
         setExecutionTime(plan.executionTime || '');
         setDelayBetweenRequests(plan.delayBetweenRequests || '');
         setIterations(plan.iterations?.toString() || '');
-        setRampUpPeriods(plan.rampUpPeriods ? JSON.parse(plan.rampUpPeriods) : []);
+        const parsedRampUpPeriods = plan.rampUpPeriods ? JSON.parse(plan.rampUpPeriods) : [];
+        setRampUpPeriods(parsedRampUpPeriods);
+        
+        // Set Advanced Settings expansion: expand if there are ramp up periods, collapse if not
+        if (parsedRampUpPeriods.length > 0) {
+          setExpandedAdvancedSettings([planId]);
+        } else {
+          setExpandedAdvancedSettings([]);
+        }
       }
+    } else {
+      // Exiting edit mode - reset Advanced Settings expansion
+      setExpandedAdvancedSettings([]);
     }
     // If validation fails while trying to exit, do nothing (button is disabled anyway)
   };
@@ -917,145 +931,179 @@ export default function ExecutionPlansPage() {
                                   />
                                 )}
                               </div>
-                              <div className="md:col-span-1 w-full">
-                                <div className="flex items-center justify-between gap-1 mb-2">
-                                  <div className="flex items-center gap-1">
-                                    <label className="block text-xs font-medium text-gray-600">Ramp up periods / VUs</label>
-                                    <Tooltip title="Configure virtual user ramp up over time. Leave empty if no ramp up is needed.">
-                                      <InfoIcon
-                                        fontSize="small"
-                                        className="text-gray-400 hover:text-gray-600 cursor-help"
-                                      />
-                                    </Tooltip>
-                                  </div>
-                                  {editingPlans.includes(plan.id) && rampUpPeriods.length === 0 && (
+                              {/* Advanced Settings Collapsible Section */}
+                              {(() => {
+                                const displayRampUpPeriods = editingPlans.includes(plan.id) 
+                                  ? rampUpPeriods 
+                                  : (plan.rampUpPeriods ? JSON.parse(plan.rampUpPeriods) : []);
+                                
+                                const hasRampUp = displayRampUpPeriods.length > 0;
+                                const isExpanded = expandedAdvancedSettings.includes(plan.id);
+                                
+                                // View mode: Hide section if no ramp up
+                                if (!editingPlans.includes(plan.id) && !hasRampUp) {
+                                  return null;
+                                }
+                                
+                                // View mode: Show expanded by default if ramp up exists
+                                if (!editingPlans.includes(plan.id) && hasRampUp) {
+                                  return (
+                                    <div className="md:col-span-3 w-full border rounded-lg p-3 bg-gray-50">
+                                      <div className="flex items-center gap-2 text-sm font-medium text-gray-600 w-full cursor-default">
+                                        <ExpandLessIcon fontSize="small" />
+                                        Advanced Settings
+                                      </div>
+                                      <div className="mt-3 space-y-3">
+                                        <div className="flex items-center gap-1 mb-2">
+                                          <label className="block text-xs font-medium text-gray-600">Ramp up periods / VUs</label>
+                                          <Tooltip title="Configure ramp up periods to gradually increase virtual users over time for load testing">
+                                            <InfoIcon
+                                              fontSize="small"
+                                              className="text-gray-400 hover:text-gray-600 cursor-help"
+                                            />
+                                          </Tooltip>
+                                        </div>
+                                        <div className="space-y-3">
+                                          {/* Table Header */}
+                                          <div className="grid grid-cols-12 gap-2 px-2 py-2 border-b border-gray-200">
+                                            <div className="col-span-3">
+                                              <label className="block text-xs font-semibold text-gray-700">Init Time</label>
+                                            </div>
+                                            <div className="col-span-3">
+                                              <label className="block text-xs font-semibold text-gray-700">End Time</label>
+                                            </div>
+                                            <div className="col-span-6">
+                                              <label className="block text-xs font-semibold text-gray-700">Virtual Users (VUs)</label>
+                                            </div>
+                                          </div>
+                                          {/* Table Rows - Disabled */}
+                                          {displayRampUpPeriods.map((period: any, index: number) => (
+                                            <div key={`view-${index}`} className="grid grid-cols-12 gap-2">
+                                              <input
+                                                type="text"
+                                                value={period.initTime || '0s'}
+                                                disabled
+                                                className="col-span-3 px-3 py-2 border rounded text-xs bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
+                                              />
+                                              <input
+                                                type="text"
+                                                value={period.endTime || '0s'}
+                                                disabled
+                                                className="col-span-3 px-3 py-2 border rounded text-xs bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
+                                              />
+                                              <input
+                                                type="text"
+                                                value={period.virtualUsers || '0'}
+                                                disabled
+                                                className="col-span-6 px-3 py-2 border rounded text-xs bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                
+                                // Edit mode: Show with logic for expansion based on ramp up data
+                                const shouldBeExpanded = isExpanded;
+                                return (
+                                  <div className="md:col-span-3 w-full border rounded-lg p-3 bg-gray-50">
                                     <button
-                                      onClick={addRampUpPeriod}
-                                      className="px-3 py-1 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                                      onClick={() => setExpandedAdvancedSettings(prev => prev.includes(plan.id) ? prev.filter(id => id !== plan.id) : [...prev, plan.id])}
+                                      className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 w-full"
                                     >
-                                      + Add Ramp Up Period
+                                      {shouldBeExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                                      Advanced Settings
                                     </button>
-                                  )}
-                                </div>
-                                {(() => {
-                                  const displayRampUpPeriods = editingPlans.includes(plan.id) 
-                                    ? rampUpPeriods 
-                                    : (plan.rampUpPeriods ? JSON.parse(plan.rampUpPeriods) : []);
-                                  
-                                  if (displayRampUpPeriods.length === 0) {
-                                    return <div className="text-xs text-gray-500 mb-2">No ramp up periods configured</div>;
-                                  }
-                                  
-                                  if (!editingPlans.includes(plan.id)) {
-                                    // View mode - show table with disabled inputs
-                                    return (
-                                      <div className="space-y-3">
-                                        {/* Table Header */}
-                                        <div className="grid grid-cols-12 gap-2 px-2 py-2 border-b border-gray-200">
-                                          <div className="col-span-3">
-                                            <label className="block text-xs font-semibold text-gray-700">Init Time</label>
+                                    {shouldBeExpanded && (
+                                      <div className="mt-3 space-y-3">
+                                        <div className="flex items-center justify-between gap-1 mb-2">
+                                          <div className="flex items-center gap-1">
+                                            <label className="block text-xs font-medium text-gray-600">Ramp up periods / VUs</label>
+                                            <Tooltip title="Configure ramp up periods to gradually increase virtual users over time for load testing">
+                                              <InfoIcon
+                                                fontSize="small"
+                                                className="text-gray-400 hover:text-gray-600 cursor-help"
+                                              />
+                                            </Tooltip>
                                           </div>
-                                          <div className="col-span-3">
-                                            <label className="block text-xs font-semibold text-gray-700">End Time</label>
+                                          {rampUpPeriods.length === 0 && (
+                                            <button
+                                              onClick={addRampUpPeriod}
+                                              className="px-3 py-1 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                                            >
+                                              + Add Ramp Up Period
+                                            </button>
+                                          )}
+                                        </div>
+                                        {rampUpPeriods.length === 0 ? (
+                                          <div className="text-xs text-gray-500">No ramp up periods configured</div>
+                                        ) : (
+                                          <div className="space-y-3">
+                                            {/* Table Header */}
+                                            <div className="grid grid-cols-12 gap-2 px-2 py-2 border-b border-gray-200">
+                                              <div className="col-span-3">
+                                                <label className="block text-xs font-semibold text-gray-700">Init Time</label>
+                                              </div>
+                                              <div className="col-span-3">
+                                                <label className="block text-xs font-semibold text-gray-700">End Time</label>
+                                              </div>
+                                              <div className="col-span-5">
+                                                <label className="block text-xs font-semibold text-gray-700">Virtual Users (VUs)</label>
+                                              </div>
+                                              <div className="col-span-1"></div>
+                                            </div>
+                                            
+                                            {/* Table Rows */}
+                                            {rampUpPeriods.map((period, index) => (
+                                              <div key={`edit-${index}`} className="grid grid-cols-12 gap-2">
+                                                <input
+                                                  type="text"
+                                                  placeholder="e.g., 0s"
+                                                  value={period.initTime}
+                                                  onChange={(e) => updateRampUpPeriod(index, 'initTime', e.target.value)}
+                                                  className={`col-span-3 px-3 py-2 border rounded text-xs bg-white text-black ${!period.initTime || timePattern.test(period.initTime) ? 'border-gray-300' : 'border-red-500'}`}
+                                                />
+                                                <input
+                                                  type="text"
+                                                  placeholder="e.g., 30s"
+                                                  value={period.endTime}
+                                                  onChange={(e) => updateRampUpPeriod(index, 'endTime', e.target.value)}
+                                                  className={`col-span-3 px-3 py-2 border rounded text-xs bg-white text-black ${!period.endTime || timePattern.test(period.endTime) ? 'border-gray-300' : 'border-red-500'}`}
+                                                />
+                                                <input
+                                                  type="text"
+                                                  placeholder="e.g., 10"
+                                                  value={period.virtualUsers}
+                                                  onChange={(e) => updateRampUpPeriod(index, 'virtualUsers', e.target.value)}
+                                                  className={`col-span-5 px-3 py-2 border rounded text-xs bg-white text-black ${!period.virtualUsers || numberPattern.test(period.virtualUsers) ? 'border-gray-300' : 'border-red-500'}`}
+                                                />
+                                                <button
+                                                  onClick={() => removeRampUpPeriod(index)}
+                                                  className="col-span-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded p-2 flex items-center justify-center"
+                                                  title="Delete this ramp up period"
+                                                >
+                                                  <DeleteIcon fontSize="small" />
+                                                </button>
+                                              </div>
+                                            ))}
+                                            
+                                            <div className="flex justify-end pt-2">
+                                              <button
+                                                onClick={addRampUpPeriod}
+                                                className="px-3 py-1 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                                              >
+                                                + Add Ramp Up Period
+                                              </button>
+                                            </div>
                                           </div>
-                                          <div className="col-span-6">
-                                            <label className="block text-xs font-semibold text-gray-700">Virtual Users (VUs)</label>
-                                          </div>
-                                        </div>
-                                        {/* Table Rows - Disabled */}
-                                        {displayRampUpPeriods.map((period: any, index: number) => (
-                                          <div key={`view-${index}`} className="grid grid-cols-12 gap-2">
-                                            <input
-                                              type="text"
-                                              value={period.initTime || '0s'}
-                                              disabled
-                                              className="col-span-3 px-3 py-2 border rounded text-xs bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
-                                            />
-                                            <input
-                                              type="text"
-                                              value={period.endTime || '0s'}
-                                              disabled
-                                              className="col-span-3 px-3 py-2 border rounded text-xs bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
-                                            />
-                                            <input
-                                              type="text"
-                                              value={period.virtualUsers || '0'}
-                                              disabled
-                                              className="col-span-6 px-3 py-2 border rounded text-xs bg-gray-100 border-gray-300 text-gray-600 cursor-not-allowed"
-                                            />
-                                          </div>
-                                        ))}
-                                      </div>
-                                    );
-                                  }
-                                  
-                                  return null; // Edit mode will be rendered below
-                                })()}
-                                {editingPlans.includes(plan.id) && (
-                                  <div className="space-y-3">
-                                    {/* Table Header - Only show if there are periods */}
-                                    {rampUpPeriods.length > 0 && (
-                                      <div className="grid grid-cols-12 gap-2 px-2 py-2 border-b border-gray-200">
-                                        <div className="col-span-3">
-                                          <label className="block text-xs font-semibold text-gray-700">Init Time</label>
-                                        </div>
-                                        <div className="col-span-3">
-                                          <label className="block text-xs font-semibold text-gray-700">End Time</label>
-                                        </div>
-                                        <div className="col-span-5">
-                                          <label className="block text-xs font-semibold text-gray-700">Virtual Users (VUs)</label>
-                                        </div>
-                                        <div className="col-span-1"></div>
-                                      </div>
-                                    )}
-                                    
-                                    {/* Table Rows */}
-                                    {rampUpPeriods.map((period, index) => (
-                                      <div key={`edit-${index}`} className="grid grid-cols-12 gap-2">
-                                        <input
-                                          type="text"
-                                          placeholder="e.g., 0s"
-                                          value={period.initTime}
-                                          onChange={(e) => updateRampUpPeriod(index, 'initTime', e.target.value)}
-                                          className={`col-span-3 px-3 py-2 border rounded text-xs bg-white text-black ${!period.initTime || timePattern.test(period.initTime) ? 'border-gray-300' : 'border-red-500'}`}
-                                        />
-                                        <input
-                                          type="text"
-                                          placeholder="e.g., 30s"
-                                          value={period.endTime}
-                                          onChange={(e) => updateRampUpPeriod(index, 'endTime', e.target.value)}
-                                          className={`col-span-3 px-3 py-2 border rounded text-xs bg-white text-black ${!period.endTime || timePattern.test(period.endTime) ? 'border-gray-300' : 'border-red-500'}`}
-                                        />
-                                        <input
-                                          type="text"
-                                          placeholder="e.g., 10"
-                                          value={period.virtualUsers}
-                                          onChange={(e) => updateRampUpPeriod(index, 'virtualUsers', e.target.value)}
-                                          className={`col-span-5 px-3 py-2 border rounded text-xs bg-white text-black ${!period.virtualUsers || numberPattern.test(period.virtualUsers) ? 'border-gray-300' : 'border-red-500'}`}
-                                        />
-                                        <button
-                                          onClick={() => removeRampUpPeriod(index)}
-                                          className="col-span-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded p-2 flex items-center justify-center"
-                                          title="Delete this ramp up period"
-                                        >
-                                          <DeleteIcon fontSize="small" />
-                                        </button>
-                                      </div>
-                                    ))}
-                                    
-                                    {rampUpPeriods.length > 0 && (
-                                      <div className="flex justify-end pt-2">
-                                        <button
-                                          onClick={addRampUpPeriod}
-                                          className="px-3 py-1 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600 transition-colors"
-                                        >
-                                          + Add Ramp Up Period
-                                        </button>
+                                        )}
                                       </div>
                                     )}
                                   </div>
-                                )}
-                              </div>
+                                );
+                              })()}
                             </div>
                         </div>
 
@@ -1072,7 +1120,6 @@ export default function ExecutionPlansPage() {
                               const reqKey = `${plan.id}-${req.id}`;
                               const { baseUrl, queryParams } = parseEndpoint(req.endpoint);
                               const truncatedBaseUrl = truncateText(baseUrl);
-                              const truncatedQueryParams = queryParams.map(([key, value]) => [key, truncateText(value)] as [string, string]);
                               return (
                                 <SortableTestRequest
                                   key={reqKey}
@@ -1084,7 +1131,7 @@ export default function ExecutionPlansPage() {
                                   isExpanded={expandedRequests.includes(req.id)}
                                   onToggleExpansion={toggleRequestExpansion}
                                   baseUrl={truncatedBaseUrl}
-                                  queryParams={truncatedQueryParams}
+                                  queryParams={queryParams}
                                   onClone={handleCloneTestRequest}
                                   isEditable={true}
                                 />
