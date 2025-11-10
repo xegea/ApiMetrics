@@ -188,7 +188,7 @@ export default function ExecutionPlansPage() {
   const { user, session } = useAuth();
   const [executionPlans, setExecutionPlans] = useState<ExecutionPlan[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showForm, setShowForm] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [expandedPlans, setExpandedPlans] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeItem, setActiveItem] = useState<{ type: 'request'; request: TestRequest; planId: string } | null>(null);
@@ -1228,7 +1228,7 @@ export default function ExecutionPlansPage() {
           </div>
         )}
 
-        {showForm && (
+        {(executionPlans.length === 0 || showForm) && (
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 mb-6">
             <h3 className="text-2xl font-semibold text-gray-800 mb-4">Create a New Execution Plan</h3>
             <div className="space-y-4">
