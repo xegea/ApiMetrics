@@ -47,6 +47,7 @@ interface SortableTestRequestProps {
   queryParams: [string, string][];
   onClone: (request: TestRequest, planId: string) => void;
   isEditable: boolean;
+  onTryIt: (request: TestRequest) => void;
 }
 
 function DroppablePlan({ plan, planKey, children }: { plan: ExecutionPlan; planKey: string; children: React.ReactNode }) {
@@ -70,7 +71,7 @@ function DroppablePlan({ plan, planKey, children }: { plan: ExecutionPlan; planK
   );
 }
 
-function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete, isExpanded, onToggleExpansion, baseUrl, queryParams, onClone, isEditable }: SortableTestRequestProps) {
+function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete, isExpanded, onToggleExpansion, baseUrl, queryParams, onClone, isEditable, onTryIt }: SortableTestRequestProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `request_${request.id}_${planId}`,
     data: { type: 'request', request, planId },
@@ -104,6 +105,13 @@ function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete
         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <button onClick={(e) => { e.stopPropagation(); onToggleExpansion(request.id); }} className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded" title={isExpanded ? "Collapse" : "Expand"}>
             {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); onTryIt(request); }} 
+            className="p-1 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded" 
+            title="Try It - Test this request"
+          >
+            <PlayCircleIcon fontSize="small" />
           </button>
           <button 
             onClick={(e) => { e.stopPropagation(); onEdit(request); }} 
@@ -216,6 +224,9 @@ export default function ExecutionPlansPage() {
   const [editingPlans, setEditingPlans] = useState<string[]>([]);
   const [savingPlans, setSavingPlans] = useState<string[]>([]);
   const [expandedAdvancedSettings, setExpandedAdvancedSettings] = useState<string[]>([]);
+  const [testingRequest, setTestingRequest] = useState<TestRequest | null>(null);
+  const [testResponse, setTestResponse] = useState<{status: number; statusText: string; headers: Record<string, string>; body: string; error?: string} | null>(null);
+  const [isTestLoading, setIsTestLoading] = useState(false);
 
   const parseEndpoint = (endpoint: string) => {
     try {
@@ -343,6 +354,85 @@ export default function ExecutionPlansPage() {
       window.location.href = '/load-tests-executions';
     } catch (error) {
       alert('Error creating load test execution: ' + (error as Error).message);
+    }
+  };
+
+  const handleTestRequest = async (request: TestRequest) => {
+    setTestingRequest(request);
+    setTestResponse(null);
+    setIsTestLoading(true);
+
+    try {
+      // Parse endpoint to get full URL
+      const endpoint = request.endpoint.startsWith('http') 
+        ? request.endpoint 
+        : `http://${request.endpoint}`;
+
+      // Prepare headers
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (request.headers) {
+        try {
+          const parsedHeaders = JSON.parse(request.headers);
+          Object.assign(headers, parsedHeaders);
+        } catch {
+          // If headers aren't valid JSON, try parsing as key:value lines
+          const lines = request.headers.split('\n').filter(line => line.trim());
+          lines.forEach(line => {
+            const [key, value] = line.split(':').map(s => s.trim());
+            if (key && value) headers[key] = value;
+          });
+        }
+      }
+
+      // Prepare request body
+      let body: string | undefined;
+      if (request.requestBody && request.requestBody.trim()) {
+        body = request.requestBody;
+      }
+
+      // Make the fetch request
+      const response = await fetch(endpoint, {
+        method: request.httpMethod,
+        headers,
+        body,
+        mode: 'cors',
+      });
+
+      // Get response text (could be JSON or plain text)
+      const responseText = await response.text();
+
+      // Try to parse as JSON, otherwise keep as text
+      let displayBody = responseText;
+      try {
+        const parsed = JSON.parse(responseText);
+        displayBody = JSON.stringify(parsed, null, 2);
+      } catch {
+        // Not JSON, keep as is
+      }
+
+      // Extract headers
+      const responseHeaders: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+
+      setTestResponse({
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders,
+        body: displayBody,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setTestResponse({
+        status: 0,
+        statusText: 'Error',
+        headers: {},
+        body: '',
+        error: errorMessage,
+      });
+    } finally {
+      setIsTestLoading(false);
     }
   };
 
@@ -1140,6 +1230,7 @@ export default function ExecutionPlansPage() {
                                   queryParams={queryParams}
                                   onClone={handleCloneTestRequest}
                                   isEditable={true}
+                                  onTryIt={handleTestRequest}
                                 />
                               );
                             })}
@@ -1311,6 +1402,147 @@ export default function ExecutionPlansPage() {
           <button onClick={() => setShowForm(true)} className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600">
             Create New Execution Plan
           </button>
+        )}
+
+        {/* Test Request Modal */}
+        {testingRequest && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Test Request</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    <span className={`${getMethodColor(testingRequest.httpMethod)} text-white px-2 py-0.5 rounded font-bold text-xs inline-block`}>
+                      {testingRequest.httpMethod}
+                    </span>
+                    <span className="ml-2 font-mono text-sm">{testingRequest.endpoint}</span>
+                  </p>
+                </div>
+                <button 
+                  onClick={() => {setTestingRequest(null); setTestResponse(null);}} 
+                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-6">
+                {isTestLoading && (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <span className="ml-4 text-gray-600">Sending request...</span>
+                  </div>
+                )}
+
+                {!isTestLoading && testResponse && (
+                  <div className="space-y-6">
+                    {/* CORS Error Disclaimer */}
+                    {testResponse.error && testResponse.error.includes('CORS') && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <p className="text-sm font-semibold text-yellow-900 mb-2">⚠️ CORS Error</p>
+                        <p className="text-sm text-yellow-800">
+                          The target API doesn't allow requests from browser clients (CORS policy). This is a security feature of the target API. You can:
+                        </p>
+                        <ul className="text-sm text-yellow-800 list-disc list-inside mt-2 ml-2">
+                          <li>Test this API using the CLI tool (no CORS restrictions)</li>
+                          <li>Ask the API provider to enable CORS for your domain</li>
+                          <li>Use an API that supports CORS (like httpbin.org for testing)</li>
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Generic Error */}
+                    {testResponse.error && !testResponse.error.includes('CORS') && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <p className="text-sm font-semibold text-red-900">Error</p>
+                        <p className="text-sm text-red-800 font-mono mt-2 break-all">{testResponse.error}</p>
+                      </div>
+                    )}
+
+                    {/* Success Response */}
+                    {!testResponse.error && (
+                      <>
+                        {/* Status */}
+                        <div className="border-b border-gray-200 pb-4">
+                          <div className="flex items-center gap-4">
+                            <div>
+                              <p className="text-sm text-gray-500">Status</p>
+                              <p className={`text-3xl font-bold ${testResponse.status >= 200 && testResponse.status < 300 ? 'text-green-600' : testResponse.status >= 400 ? 'text-red-600' : 'text-orange-600'}`}>
+                                {testResponse.status}
+                              </p>
+                            </div>
+                            <div className="text-gray-700">{testResponse.statusText}</div>
+                          </div>
+                        </div>
+
+                        {/* Headers */}
+                        {Object.keys(testResponse.headers).length > 0 && (
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">Response Headers</h3>
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2 max-h-48 overflow-y-auto">
+                              {Object.entries(testResponse.headers).map(([key, value]) => (
+                                <div key={key} className="text-sm">
+                                  <span className="font-mono font-semibold text-blue-600">{key}:</span>
+                                  <span className="font-mono text-gray-700 ml-2">{String(value)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Body */}
+                        {testResponse.body && (
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">Response Body</h3>
+                            <pre className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700 font-mono overflow-x-auto max-h-64 overflow-y-auto">
+                              {testResponse.body}
+                            </pre>
+                          </div>
+                        )}
+
+                        {!testResponse.body && (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <p className="text-sm text-gray-500">No response body</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {!isTestLoading && !testResponse && (
+                  <div className="text-center py-8">
+                    <button 
+                      onClick={() => handleTestRequest(testingRequest)}
+                      className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
+                    >
+                      Send Request
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-6 flex justify-between items-center">
+                {!isTestLoading && testResponse && (
+                  <button 
+                    onClick={() => handleTestRequest(testingRequest)}
+                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 font-medium"
+                  >
+                    Try Again
+                  </button>
+                )}
+                <button 
+                  onClick={() => {setTestingRequest(null); setTestResponse(null);}}
+                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
