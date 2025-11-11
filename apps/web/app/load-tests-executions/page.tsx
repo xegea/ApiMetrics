@@ -32,11 +32,6 @@ export default function LoadTestsExecutionsPage() {
       executions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       
       setLoadTestExecutions(executions);
-      
-      // Auto-expand the most recent execution if there are any
-      if (executions.length > 0) {
-        setExpandedExecutions([executions[0].id]);
-      }
     } catch (error) {
       console.error('Failed to fetch load test executions:', error);
     } finally {
@@ -54,15 +49,22 @@ export default function LoadTestsExecutionsPage() {
     );
 
     // Fetch results when expanding
-    if (isExpanding && !executionResults[executionId]) {
+    if (isExpanding) {
       try {
+        console.log('Fetching results for execution:', executionId);
         const response = await getLoadTestExecutionResults(executionId);
+        console.log('Got results response:', response);
         setExecutionResults(prev => ({
           ...prev,
           [executionId]: response.testResults,
         }));
       } catch (error) {
         console.error('Failed to fetch execution results:', error);
+        // Set empty array on error so loading spinner disappears
+        setExecutionResults(prev => ({
+          ...prev,
+          [executionId]: [],
+        }));
       }
     }
   };
@@ -161,41 +163,41 @@ export default function LoadTestsExecutionsPage() {
                 {expandedExecutions.includes(execution.id) && (
                   <div className="border-t border-gray-100 p-6 space-y-6">
                     {/* Execution Results */}
-                    {executionResults[execution.id] ? (
+                    {executionResults[execution.id] !== undefined ? (
                       <>
                         {/* Metrics Section */}
                         <div className="bg-white border border-gray-200 rounded-lg p-6">
                           <h3 className="text-lg font-medium text-gray-900 mb-4">Execution Metrics</h3>
-                          {executionResults[execution.id].length > 0 ? (
+                          {executionResults[execution.id]?.length > 0 && executionResults[execution.id][0].avgLatency !== null ? (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                               <div className="text-center">
                                 <div className="text-2xl font-bold text-blue-600">
-                                  {(executionResults[execution.id].reduce((sum, r) => sum + r.avgLatency, 0) / executionResults[execution.id].length / 1000000).toFixed(2)}ms
+                                  {(executionResults[execution.id].reduce((sum, r) => sum + (r.avgLatency || 0), 0) / executionResults[execution.id].length / 1000000).toFixed(2)}ms
                                 </div>
                                 <div className="text-sm text-gray-500">Avg Response Time</div>
                               </div>
                               <div className="text-center">
                                 <div className="text-2xl font-bold text-blue-600">
-                                  {(executionResults[execution.id].reduce((sum, r) => sum + r.p95Latency, 0) / executionResults[execution.id].length / 1000000).toFixed(2)}ms
+                                  {(executionResults[execution.id].reduce((sum, r) => sum + (r.p95Latency || 0), 0) / executionResults[execution.id].length / 1000000).toFixed(2)}ms
                                 </div>
                                 <div className="text-sm text-gray-500">P95 Response Time</div>
                               </div>
                               <div className="text-center">
                                 <div className="text-2xl font-bold text-green-600">
-                                  {((executionResults[execution.id].reduce((sum, r) => sum + r.successRate, 0) / executionResults[execution.id].length) * 100).toFixed(1)}%
+                                  {((executionResults[execution.id].reduce((sum, r) => sum + (r.successRate || 0), 0) / executionResults[execution.id].length) * 100).toFixed(1)}%
                                 </div>
                                 <div className="text-sm text-gray-500">Success Rate</div>
                               </div>
                             </div>
                           ) : (
-                            <p className="text-gray-500 text-center">No results available yet</p>
+                            <p className="text-gray-500 text-center">No results available yet. Run tests with the CLI to populate metrics.</p>
                           )}
                         </div>
 
                         {/* Test Results Table */}
                         <div className="bg-white border border-gray-200 rounded-lg p-6">
                           <h3 className="text-lg font-medium text-gray-900 mb-4">Test Results</h3>
-                          {executionResults[execution.id].length > 0 ? (
+                          {executionResults[execution.id]?.length > 0 ? (
                             <div className="overflow-x-auto">
                               <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
@@ -217,18 +219,18 @@ export default function LoadTestsExecutionsPage() {
                                         {new Date(result.timestamp).toLocaleString()}
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {(result.avgLatency / 1000000).toFixed(2)}ms
+                                        {result.avgLatency !== null ? `${(result.avgLatency / 1000000).toFixed(2)}ms` : '-'}
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {(result.p95Latency / 1000000).toFixed(2)}ms
+                                        {result.p95Latency !== null ? `${(result.p95Latency / 1000000).toFixed(2)}ms` : '-'}
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                          result.successRate >= 0.95 ? 'bg-green-100 text-green-800' :
-                                          result.successRate >= 0.8 ? 'bg-yellow-100 text-yellow-800' :
-                                          'bg-red-100 text-red-800'
+                                          result.successRate !== null && result.successRate >= 0.95 ? 'bg-green-100 text-green-800' :
+                                          result.successRate !== null && result.successRate >= 0.8 ? 'bg-yellow-100 text-yellow-800' :
+                                          'bg-gray-100 text-gray-800'
                                         }`}>
-                                          {(result.successRate * 100).toFixed(1)}%
+                                          {result.successRate !== null ? `${(result.successRate * 100).toFixed(1)}%` : '-'}
                                         </span>
                                       </td>
                                     </tr>

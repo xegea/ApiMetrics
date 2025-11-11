@@ -157,6 +157,7 @@ async function getLoadTestExecutionResults(
     testResults: [
       {
         id: loadTestExecution.id,
+        testId: loadTestExecution.executionPlanId,
         avgLatency: loadTestExecution.avgLatency,
         p95Latency: loadTestExecution.p95Latency,
         successRate: loadTestExecution.successRate,
