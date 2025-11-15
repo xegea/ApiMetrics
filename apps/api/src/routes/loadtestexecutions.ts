@@ -3,7 +3,6 @@ import { LoadTestExecution } from '@apimetrics/shared';
 import { prisma } from '../services/db';
 import { verifyToken } from './auth';
 import { ensureUserAndTenant } from '../services/tenancy';
-import archiver from 'archiver';
 
 interface CreateLoadTestExecutionBody {
   executionPlanId: string;
@@ -241,7 +240,8 @@ async function deleteLoadTestExecution(
 
 /**
  * GET /loadtestexecutions/:id/download
- * Download a ZIP file containing test files and instructions for the load test execution
+ * Download a JSON execution plan with embedded JWT token
+ * User runs: npx @xegea/apimetrics-cli execute-plan <file.json>
  */
 async function downloadLoadTestExecution(
   request: FastifyRequest<{ Params: { id: string } }>,
@@ -277,90 +277,74 @@ async function downloadLoadTestExecution(
     return reply.status(404).send({ message: 'Load test execution not found' });
   }
 
-  // Set the archive name
-  const timestamp = new Date(loadTestExecution.createdAt).toISOString().replace(/[:.]/g, '-').slice(0, -5);
-  const zipName = `Execution Plan ${loadTestExecution.executionPlan.name} - ${timestamp}.zip`;
+  // Extract JWT token from request headers
+  const authHeader = request.headers.authorization || '';
+  const jwtToken = authHeader.replace('Bearer ', '');
 
-  const archive = archiver('zip', {
-    zlib: { level: 9 } // Sets the compression level
-  });
-
-  // Collect all data in buffers instead of streaming
-  const buffers: Buffer[] = [];
-  archive.on('data', (chunk: Buffer) => {
-    buffers.push(chunk);
-  });
-
-  // Generate test JSON files for each request
-  loadTestExecution.executionPlan.testRequests.forEach((testRequest: any, index: number) => {
-    const testConfig = {
-      target: testRequest.endpoint,
-      method: testRequest.httpMethod,
-      rps: 10, // Default RPS, could be configurable
+  // Create a transparent, readable JSON execution plan
+  const executionPlan: any = {
+    metadata: {
+      name: loadTestExecution.name,
+      planName: loadTestExecution.executionPlan.name,
+      createdAt: loadTestExecution.createdAt.toISOString(),
+      description: 'Execution plan for ApiMetrics load testing',
+    },
+    authentication: {
+      token: jwtToken,
+      tokenType: 'JWT',
+      note: 'This token is your personal access token. Do not share this file.',
+    },
+    tests: [{
+      id: loadTestExecution.id,
+      name: loadTestExecution.name,
+      requests: loadTestExecution.executionPlan.testRequests.map((testRequest: any) => ({
+        method: testRequest.httpMethod,
+        target: testRequest.endpoint,
+        description: `${testRequest.httpMethod} request to ${testRequest.endpoint}`,
+      })),
+      rps: 10,
       duration: loadTestExecution.executionPlan.executionTime || '1m',
-      id: `${loadTestExecution.id}-${index + 1}`,
-    };
+      iterations: loadTestExecution.executionPlan.iterations || 1,
+      delayBetweenRequests: loadTestExecution.executionPlan.delayBetweenRequests || '100ms',
+    }],
+  };
 
-    archive.append(JSON.stringify(testConfig, null, 2), { name: `test-${index + 1}.json` });
-  });
+  // Set headers for download
+  // Create a shell-friendly filename by replacing spaces with hyphens
+  // Format timestamp as YYYYMMDD-HHMMSSMS for uniqueness (e.g., 20251112-095006123)
+  const date = new Date(); // Use current time for unique filename on each download
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  const ms = String(date.getMilliseconds()).padStart(3, '0');
+  const timestamp = `${year}${month}${day}-${hours}${minutes}${seconds}${ms}`;
+  
+  const sanitizedPlanName = loadTestExecution.executionPlan.name
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/[^a-zA-Z0-9\-_]/g, '') // Remove special characters
+    .toLowerCase(); // Convert to lowercase
+  const fileName = `execution-plan-${sanitizedPlanName}-${timestamp}.json`;
 
-  // Generate README.md
-  const readme = `# Load Test Execution: ${loadTestExecution.name}
+  console.log('DEBUG: Generated filename:', fileName);
+  console.log('DEBUG: Plan name:', loadTestExecution.executionPlan.name);
+  console.log('DEBUG: Sanitized plan name:', sanitizedPlanName);
+  console.log('DEBUG: Timestamp:', timestamp);
 
-## Instructions
+  // Add instructions with the actual filename
+  executionPlan.instructions = {
+    step1: 'Install Node.js from https://nodejs.org if you do not have it',
+    step2: `Open Terminal and run: npx @xegea/apimetrics-cli execute-plan ~/Downloads/${fileName}`,
+    step3: 'Results will be automatically uploaded to your ApiMetrics dashboard',
+  };
 
-1. Extract this ZIP file to a directory
-2. Install the ApiMetrics CLI if not already installed:
-   \`\`\`bash
-   npm install -g @apimetrics/cli
-   \`\`\`
+  reply.header('Access-Control-Allow-Origin', '*');
+  reply.header('Content-Type', 'application/json');
+  reply.header('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
 
-3. Run each test file using the CLI:
-   \`\`\`bash
-   apimetrics run test-1.json --token YOUR_JWT_TOKEN
-   apimetrics run test-2.json --token YOUR_JWT_TOKEN
-   # ... run all test files
-   \`\`\`
-
-   Replace \`YOUR_JWT_TOKEN\` with your authentication token.
-
-## Test Configuration
-
-- Execution Plan: ${loadTestExecution.executionPlan.name}
-- Duration: ${loadTestExecution.executionPlan.executionTime || '1m'}
-- Delay Between Requests: ${loadTestExecution.executionPlan.delayBetweenRequests || '100ms'}
-- Iterations: ${loadTestExecution.executionPlan.iterations || 1}
-
-## Test Requests
-
-${loadTestExecution.executionPlan.testRequests.map((req: any, index: number) =>
-  `${index + 1}. ${req.httpMethod} ${req.endpoint}`
-).join('\n')}
-
-## Notes
-
-- Results will be automatically uploaded to your ApiMetrics dashboard
-- Make sure you have Vegeta installed for load testing
-- The JWT token is required for authentication and result upload
-`;
-
-  archive.append(readme, { name: 'README.md' });
-
-  await archive.finalize();
-
-  const zipBuffer = Buffer.concat(buffers);
-
-  // Set CORS headers explicitly for file download
-  reply.header('Access-Control-Allow-Origin', 'http://localhost:8080');
-  reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  reply.header('Access-Control-Allow-Headers', 'Authorization');
-  reply.header('Access-Control-Expose-Headers', 'Content-Disposition');
-
-  reply.header('Content-Type', 'application/zip');
-  reply.header('Content-Disposition', `attachment; filename="${zipName}"`);
-  reply.header('Content-Length', zipBuffer.length.toString());
-
-  reply.send(zipBuffer);
+  reply.send(executionPlan);
 }
 
 export default async function loadTestExecutionsRoutes(app: FastifyInstance) {
