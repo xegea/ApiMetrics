@@ -18,6 +18,19 @@ export interface TestResult {
   p95Latency: number;
   successRate: number;
   timestamp: string;
+  // Detailed metrics from Vegeta
+  minLatency?: number; // Minimum latency in nanoseconds
+  maxLatency?: number; // Maximum latency in nanoseconds
+  p50Latency?: number; // P50 latency in nanoseconds
+  p99Latency?: number; // P99 latency in nanoseconds
+  totalRequests?: number; // Total number of requests made
+  testDuration?: string; // Duration of the test (e.g., "30.001s")
+  actualRate?: number; // Actual RPS achieved
+  throughput?: number; // Throughput in req/sec
+  bytesIn?: number; // Total bytes received
+  bytesOut?: number; // Total bytes sent
+  statusCodes?: Record<string, number>; // Status code counts
+  errorDetails?: string[]; // Error details
 }
 
 /**
@@ -53,6 +66,19 @@ export interface LoadTestExecution {
   p95Latency?: number; // P95 latency in nanoseconds
   successRate?: number; // Success rate as decimal (0-1)
   resultTimestamp?: string; // Timestamp of when results were recorded
+  // Detailed metrics from Vegeta
+  minLatency?: number; // Minimum latency in nanoseconds
+  maxLatency?: number; // Maximum latency in nanoseconds
+  p50Latency?: number; // P50 latency in nanoseconds
+  p99Latency?: number; // P99 latency in nanoseconds
+  totalRequests?: number; // Total number of requests made
+  testDuration?: string; // Duration of the test (e.g., "30.001s")
+  actualRate?: number; // Actual RPS achieved
+  throughput?: number; // Throughput in req/sec
+  bytesIn?: number; // Total bytes received
+  bytesOut?: number; // Total bytes sent
+  statusCodes?: Record<string, number>; // Status code counts
+  errorDetails?: string[]; // Error details
   createdAt: string;
   updatedAt: string;
 }

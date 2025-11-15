@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getLoadTestExecutions, getLoadTestExecutionResults } from '@/lib/api';
+import { getLoadTestExecutions, getLoadTestExecutionResults, deleteLoadTestExecution } from '@/lib/api';
 import { LoadTestExecution, TestResult } from '@apimetrics/shared';
 import { useAuth } from '@/lib/auth';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -35,8 +35,37 @@ export default function LoadTestsExecutionsPage() {
   useEffect(() => {
     if (session?.user?.email) {
       fetchLoadTestExecutions();
+      
+      // Set up polling for running executions
+      const pollInterval = setInterval(() => {
+        checkForStatusUpdates();
+      }, 5000); // Check every 5 seconds
+      
+      return () => clearInterval(pollInterval);
     }
   }, [session]);
+
+  const checkForStatusUpdates = async () => {
+    try {
+      const response = await getLoadTestExecutions();
+      const latestExecutions = response.loadTestExecutions;
+      
+      // Check if any running executions have been completed
+      const needsUpdate = loadTestExecutions.some(existing => {
+        const latest = latestExecutions.find(l => l.id === existing.id);
+        return latest && existing.status === 'running' && latest.status !== 'running';
+      });
+      
+      if (needsUpdate) {
+        // Sort by createdAt descending (most recent first)
+        latestExecutions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setLoadTestExecutions(latestExecutions);
+      }
+    } catch (error) {
+      // Silently ignore polling errors
+      console.debug('Status check failed:', error);
+    }
+  };
 
   const fetchLoadTestExecutions = async () => {
     try {
@@ -149,88 +178,21 @@ export default function LoadTestsExecutionsPage() {
                     <button
                       onClick={async (e) => {
                         e.stopPropagation();
-                        try {
-                          const token = session?.access_token;
-                          if (!token) {
-                            alert('You must be logged in to download executions');
-                            return;
+                        if (window.confirm(`Are you sure you want to delete the execution "${execution.name}"? This action cannot be undone.`)) {
+                          try {
+                            await deleteLoadTestExecution(execution.id);
+                            // Refresh the list
+                            await fetchLoadTestExecutions();
+                          } catch (error) {
+                            console.error('Failed to delete execution:', error);
+                            alert('Failed to delete execution. Please try again.');
                           }
-
-                          // Create a temporary link element for download
-                          const link = document.createElement('a');
-                          link.href = `${process.env.NEXT_PUBLIC_APIMETRICS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/loadtestexecutions/${execution.id}/download`;
-                          link.style.display = 'none';
-                          link.target = '_blank'; // Open in new tab to avoid CORS issues
-
-                          // For authenticated requests, we need to use fetch
-                          const response = await fetch(link.href, {
-                            method: 'GET',
-                            headers: {
-                              'Authorization': `Bearer ${token}`,
-                            },
-                          });
-
-                          if (!response.ok) {
-                            throw new Error(`Download failed: ${response.status}`);
-                          }
-
-                          // Extract the actual filename from Content-Disposition header
-                          const contentDisposition = response.headers.get('content-disposition') || '';
-                          
-                          // Generate timestamp for fallback filename (matches API format)
-                          const date = new Date(); // Use current time for unique filename on each download
-                          const year = date.getFullYear();
-                          const month = String(date.getMonth() + 1).padStart(2, '0');
-                          const day = String(date.getDate()).padStart(2, '0');
-                          const hours = String(date.getHours()).padStart(2, '0');
-                          const minutes = String(date.getMinutes()).padStart(2, '0');
-                          const seconds = String(date.getSeconds()).padStart(2, '0');
-                          const ms = String(date.getMilliseconds()).padStart(3, '0');
-                          const timestamp = `${year}${month}${day}-${hours}${minutes}${seconds}${ms}`;
-                          
-                          // Sanitize plan name for fallback
-                          const planName = (execution as any).executionPlan?.name || execution.name;
-                          const sanitizedPlanName = planName
-                            .replace(/\s+/g, '-') // Replace spaces with hyphens
-                            .replace(/[^a-zA-Z0-9\-_]/g, '') // Remove special characters
-                            .toLowerCase(); // Convert to lowercase
-                          
-                          let actualFilename = `execution-plan-${sanitizedPlanName}-${timestamp}.json`;
-                          
-                          if (contentDisposition) {
-                            // Parse filename from Content-Disposition header
-                            // Format: attachment; filename="name.json"; filename*=UTF-8''name.json
-                            const match = contentDisposition.match(/filename="([^"]+)"/);
-                            if (match && match[1]) {
-                              actualFilename = match[1];
-                            }
-                          }
-
-                          const blob = await response.blob();
-                          const url = window.URL.createObjectURL(blob);
-                          const downloadLink = document.createElement('a');
-                          downloadLink.href = url;
-                          downloadLink.download = actualFilename;
-                          document.body.appendChild(downloadLink);
-                          downloadLink.click();
-                          document.body.removeChild(downloadLink);
-                          window.URL.revokeObjectURL(url);
-
-                          // Open command modal with the actual filename
-                          setCommandModal({
-                            isOpen: true,
-                            command: `npx @xegea/apimetrics-cli execute-plan ~/Downloads/${actualFilename}`,
-                            executionName: execution.name,
-                            actualFilename: actualFilename,
-                          });
-                        } catch (error) {
-                          console.error('Download failed:', error);
-                          alert('Failed to download execution. Please try again.');
                         }
                       }}
-                      className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors"
+                      className="p-1 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Delete execution"
                     >
-                      Download Execution
+                      <DeleteIcon fontSize="small" />
                     </button>
                     <ChevronRightIcon className={`transform transition-transform cursor-pointer text-gray-600 hover:text-gray-800 ${
                       expandedExecutions.includes(execution.id) ? 'rotate-90' : ''
@@ -243,32 +205,249 @@ export default function LoadTestsExecutionsPage() {
                     {/* Execution Results */}
                     {executionResults[execution.id] !== undefined ? (
                       <>
-                        {/* Metrics Section */}
                         <div className="bg-white border border-gray-200 rounded-lg p-6">
                           <h3 className="text-lg font-medium text-gray-900 mb-4">Execution Metrics</h3>
-                          {executionResults[execution.id]?.length > 0 && executionResults[execution.id][0].avgLatency !== null ? (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                              <div className="text-center">
-                                <div className="text-2xl font-bold text-blue-600">
-                                  {(executionResults[execution.id].reduce((sum, r) => sum + (r.avgLatency || 0), 0) / executionResults[execution.id].length / 1000000).toFixed(2)}ms
+                          {execution.avgLatency !== null && execution.avgLatency !== undefined ? (
+                            <div className="space-y-6">
+                              {/* Performance Overview */}
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="text-center">
+                                  <div className="text-2xl font-bold text-blue-600">
+                                    {execution.avgLatency ? (execution.avgLatency / 1000000).toFixed(2) : 'N/A'}ms
+                                  </div>
+                                  <div className="text-sm text-gray-500">Avg Response Time</div>
                                 </div>
-                                <div className="text-sm text-gray-500">Avg Response Time</div>
-                              </div>
-                              <div className="text-center">
-                                <div className="text-2xl font-bold text-blue-600">
-                                  {(executionResults[execution.id].reduce((sum, r) => sum + (r.p95Latency || 0), 0) / executionResults[execution.id].length / 1000000).toFixed(2)}ms
+                                <div className="text-center">
+                                  <div className="text-2xl font-bold text-blue-600">
+                                    {execution.p95Latency ? (execution.p95Latency / 1000000).toFixed(2) : 'N/A'}ms
+                                  </div>
+                                  <div className="text-sm text-gray-500">P95 Response Time</div>
                                 </div>
-                                <div className="text-sm text-gray-500">P95 Response Time</div>
-                              </div>
-                              <div className="text-center">
-                                <div className="text-2xl font-bold text-green-600">
-                                  {((executionResults[execution.id].reduce((sum, r) => sum + (r.successRate || 0), 0) / executionResults[execution.id].length) * 100).toFixed(1)}%
+                                <div className="text-center">
+                                  <div className="text-2xl font-bold text-green-600">
+                                    {execution.successRate !== undefined ? ((execution.successRate || 0) * 100).toFixed(1) : 'N/A'}%
+                                  </div>
+                                  <div className="text-sm text-gray-500">Success Rate</div>
                                 </div>
-                                <div className="text-sm text-gray-500">Success Rate</div>
                               </div>
+
+                              {/* Detailed Metrics */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Response Times */}
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                  <h4 className="text-md font-medium text-gray-900 mb-3">Response Times</h4>
+                                  <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-500">Mean:</span>
+                                      <span className="font-mono text-gray-900">{execution.avgLatency ? (execution.avgLatency / 1000000).toFixed(2) : 'N/A'}ms</span>
+                                    </div>
+                                    {execution.minLatency && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">Min:</span>
+                                        <span className="font-mono text-gray-900">{(execution.minLatency / 1000000).toFixed(2)}ms</span>
+                                      </div>
+                                    )}
+                                    {execution.maxLatency && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">Max:</span>
+                                        <span className="font-mono text-gray-900">{(execution.maxLatency / 1000000).toFixed(2)}ms</span>
+                                      </div>
+                                    )}
+                                    {execution.p50Latency && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">P50:</span>
+                                        <span className="font-mono text-gray-900">{(execution.p50Latency / 1000000).toFixed(2)}ms</span>
+                                      </div>
+                                    )}
+                                    {execution.p95Latency && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">P95:</span>
+                                        <span className="font-mono text-gray-900">{(execution.p95Latency / 1000000).toFixed(2)}ms</span>
+                                      </div>
+                                    )}
+                                    {execution.p99Latency && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">P99:</span>
+                                        <span className="font-mono text-gray-900">{(execution.p99Latency / 1000000).toFixed(2)}ms</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Performance Metrics */}
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                  <h4 className="text-md font-medium text-gray-900 mb-3">Performance</h4>
+                                  <div className="space-y-2 text-sm">
+                                    {execution.totalRequests && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">Total Requests:</span>
+                                        <span className="font-mono text-gray-900">{execution.totalRequests.toLocaleString()}</span>
+                                      </div>
+                                    )}
+                                    {execution.testDuration && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">Duration:</span>
+                                        <span className="font-mono text-gray-900">{execution.testDuration}</span>
+                                      </div>
+                                    )}
+                                    {execution.actualRate && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">Actual RPS:</span>
+                                        <span className="font-mono text-gray-900">{execution.actualRate.toFixed(1)}</span>
+                                      </div>
+                                    )}
+                                    {execution.throughput && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">Throughput:</span>
+                                        <span className="font-mono text-gray-900">{execution.throughput.toFixed(1)} req/sec</span>
+                                      </div>
+                                    )}
+                                    {execution.bytesIn && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">Bytes In:</span>
+                                        <span className="font-mono text-gray-900">{(execution.bytesIn / 1024).toFixed(1)} KB</span>
+                                      </div>
+                                    )}
+                                    {execution.bytesOut && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-500">Bytes Out:</span>
+                                        <span className="font-mono text-gray-900">{(execution.bytesOut / 1024).toFixed(1)} KB</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Status Codes */}
+                              {execution.statusCodes && Object.keys(execution.statusCodes).length > 0 && (
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                  <h4 className="text-md font-medium text-gray-900 mb-3">Status Codes</h4>
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    {Object.entries(execution.statusCodes).map(([code, count]) => (
+                                      <div key={code} className={`text-center p-2 rounded text-sm font-medium ${
+                                        parseInt(code) >= 200 && parseInt(code) < 300 ? 'bg-green-100 text-green-800' :
+                                        parseInt(code) >= 400 && parseInt(code) < 500 ? 'bg-yellow-100 text-yellow-800' :
+                                        parseInt(code) >= 500 ? 'bg-red-100 text-red-800' :
+                                        'bg-gray-100 text-gray-800'
+                                      }`}>
+                                        {code}: {count}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Errors */}
+                              {execution.errorDetails && execution.errorDetails.length > 0 && (
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                  <h4 className="text-md font-medium text-red-900 mb-3">Errors ({execution.errorDetails.length})</h4>
+                                  <div className="space-y-1">
+                                    {execution.errorDetails.slice(0, 5).map((error, index) => (
+                                      <div key={index} className="text-sm text-red-700 font-mono bg-red-100 p-2 rounded">
+                                        {error}
+                                      </div>
+                                    ))}
+                                    {execution.errorDetails.length > 5 && (
+                                      <div className="text-sm text-red-600">
+                                        ... and {execution.errorDetails.length - 5} more errors
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ) : (
-                            <p className="text-gray-500 text-center">No results available yet. Run tests with the CLI to populate metrics.</p>
+                            <div className="text-center space-y-4">
+                              <p className="text-gray-500">No results available yet. Run tests with the CLI to populate metrics.</p>
+                              {execution.status !== 'completed' && (
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      const token = session?.access_token;
+                                      if (!token) {
+                                        alert('You must be logged in to download executions');
+                                        return;
+                                      }
+
+                                      // Create a temporary link element for download
+                                      const link = document.createElement('a');
+                                      link.href = `${process.env.NEXT_PUBLIC_APIMETRICS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/loadtestexecutions/${execution.id}/download`;
+                                      link.style.display = 'none';
+                                      link.target = '_blank'; // Open in new tab to avoid CORS issues
+
+                                      // For authenticated requests, we need to use fetch
+                                      const response = await fetch(link.href, {
+                                        method: 'GET',
+                                        headers: {
+                                          'Authorization': `Bearer ${token}`,
+                                        },
+                                      });
+
+                                      if (!response.ok) {
+                                        throw new Error(`Download failed: ${response.status}`);
+                                      }
+
+                                      // Extract the actual filename from Content-Disposition header
+                                      const contentDisposition = response.headers.get('content-disposition') || '';
+                                      
+                                      // Generate timestamp for fallback filename (matches API format)
+                                      const date = new Date(); // Use current time for unique filename on each download
+                                      const year = date.getFullYear();
+                                      const month = String(date.getMonth() + 1).padStart(2, '0');
+                                      const day = String(date.getDate()).padStart(2, '0');
+                                      const hours = String(date.getHours()).padStart(2, '0');
+                                      const minutes = String(date.getMinutes()).padStart(2, '0');
+                                      const seconds = String(date.getSeconds()).padStart(2, '0');
+                                      const ms = String(date.getMilliseconds()).padStart(3, '0');
+                                      const timestamp = `${year}${month}${day}-${hours}${minutes}${seconds}${ms}`;
+                                      
+                                      // Sanitize plan name for fallback
+                                      const planName = (execution as any).executionPlan?.name || execution.name;
+                                      const sanitizedPlanName = planName
+                                        .replace(/\s+/g, '-') // Replace spaces with hyphens
+                                        .replace(/[^a-zA-Z0-9\-_]/g, '') // Remove special characters
+                                        .toLowerCase(); // Convert to lowercase
+                                      
+                                      let actualFilename = `execution-plan-${sanitizedPlanName}-${timestamp}.json`;
+                                      
+                                      if (contentDisposition) {
+                                        // Parse filename from Content-Disposition header
+                                        // Format: attachment; filename="name.json"; filename*=UTF-8''name.json
+                                        const match = contentDisposition.match(/filename="([^"]+)"/);
+                                        if (match && match[1]) {
+                                          actualFilename = match[1];
+                                        }
+                                      }
+
+                                      const blob = await response.blob();
+                                      const url = window.URL.createObjectURL(blob);
+                                      const downloadLink = document.createElement('a');
+                                      downloadLink.href = url;
+                                      downloadLink.download = actualFilename;
+                                      document.body.appendChild(downloadLink);
+                                      downloadLink.click();
+                                      document.body.removeChild(downloadLink);
+                                      window.URL.revokeObjectURL(url);
+
+                                      // Open command modal with the actual filename
+                                      setCommandModal({
+                                        isOpen: true,
+                                        command: `npx @xegea/apimetrics-cli execute-plan ~/Downloads/${actualFilename}`,
+                                        executionName: execution.name,
+                                        actualFilename: actualFilename,
+                                      });
+                                    } catch (error) {
+                                      console.error('Download failed:', error);
+                                      alert('Failed to download execution. Please try again.');
+                                    }
+                                  }}
+                                  className="px-4 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors"
+                                >
+                                  Download and Run
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
 
@@ -282,8 +461,14 @@ export default function LoadTestsExecutionsPage() {
                                   <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test ID</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min Latency</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Latency</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P50 Latency</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P95 Latency</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P99 Latency</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Max Latency</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Requests</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Throughput</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Success Rate</th>
                                   </tr>
                                 </thead>
@@ -297,10 +482,28 @@ export default function LoadTestsExecutionsPage() {
                                         {new Date(result.timestamp).toLocaleString()}
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {result.avgLatency !== null ? `${(result.avgLatency / 1000000).toFixed(2)}ms` : '-'}
+                                        {result.minLatency !== null && result.minLatency !== undefined ? `${(result.minLatency / 1000000).toFixed(2)}ms` : '-'}
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {result.p95Latency !== null ? `${(result.p95Latency / 1000000).toFixed(2)}ms` : '-'}
+                                        {result.avgLatency !== null && result.avgLatency !== undefined ? `${(result.avgLatency / 1000000).toFixed(2)}ms` : '-'}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {result.p50Latency !== null && result.p50Latency !== undefined ? `${(result.p50Latency / 1000000).toFixed(2)}ms` : '-'}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {result.p95Latency !== null && result.p95Latency !== undefined ? `${(result.p95Latency / 1000000).toFixed(2)}ms` : '-'}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {result.p99Latency !== null && result.p99Latency !== undefined ? `${(result.p99Latency / 1000000).toFixed(2)}ms` : '-'}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {result.maxLatency !== null && result.maxLatency !== undefined ? `${(result.maxLatency / 1000000).toFixed(2)}ms` : '-'}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {result.totalRequests !== null && result.totalRequests !== undefined ? result.totalRequests.toLocaleString() : '-'}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {result.throughput !== null && result.throughput !== undefined ? `${result.throughput.toFixed(1)} req/s` : '-'}
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${

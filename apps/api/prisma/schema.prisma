@@ -45,6 +45,19 @@ model LoadTestExecution {
   p95Latency      Float?   // P95 latency in nanoseconds
   successRate     Float?   // Success rate as decimal (0-1)
   resultTimestamp DateTime? // Timestamp of when results were recorded
+  // Detailed metrics from Vegeta
+  minLatency      Float?   // Minimum latency in nanoseconds
+  maxLatency      Float?   // Maximum latency in nanoseconds
+  p50Latency      Float?   // P50 latency in nanoseconds
+  p99Latency      Float?   // P99 latency in nanoseconds
+  totalRequests   Int?     // Total number of requests made
+  testDuration    String?  // Duration of the test (e.g., "30.001s")
+  actualRate      Float?   // Actual RPS achieved
+  throughput      Float?   // Throughput in req/sec
+  bytesIn         Int?     // Total bytes received
+  bytesOut        Int?     // Total bytes sent
+  statusCodes     String?  // JSON string of status code counts
+  errorDetails    String?  // JSON string of error details
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

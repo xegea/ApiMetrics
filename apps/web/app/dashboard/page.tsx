@@ -129,6 +129,16 @@ export default function DashboardPage() {
                             <p className="flex items-center text-sm text-gray-500">
                               P95 Latency: <span className="ml-1 font-medium text-gray-900">{result.p95Latency}ms</span>
                             </p>
+                            {result.p50Latency && (
+                              <p className="flex items-center text-sm text-gray-500">
+                                P50 Latency: <span className="ml-1 font-medium text-gray-900">{result.p50Latency}ms</span>
+                              </p>
+                            )}
+                            {result.totalRequests && (
+                              <p className="flex items-center text-sm text-gray-500">
+                                Requests: <span className="ml-1 font-medium text-gray-900">{result.totalRequests}</span>
+                              </p>
+                            )}
                           </div>
                           <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
                             <p>{formatTimestamp(result.timestamp)}</p>

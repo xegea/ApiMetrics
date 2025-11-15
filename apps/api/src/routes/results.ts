@@ -13,6 +13,19 @@ interface PostResultsBody {
   p95Latency: number;
   successRate: number;
   timestamp: string;
+  // Detailed metrics from Vegeta
+  minLatency?: number;
+  maxLatency?: number;
+  p50Latency?: number;
+  p99Latency?: number;
+  requests?: number;
+  duration?: string;
+  rate?: number;
+  throughput?: number;
+  bytesIn?: number;
+  bytesOut?: number;
+  statusCodes?: Record<string, number>;
+  errors?: string[];
 }
 
 interface GetResultsParams {
@@ -91,6 +104,19 @@ async function postResults(
         resultTimestamp: new Date(result.timestamp),
         status: 'completed',
         updatedAt: new Date(),
+        // Comprehensive metrics from Vegeta
+        minLatency: result.minLatency,
+        maxLatency: result.maxLatency,
+        p50Latency: result.p50Latency,
+        p99Latency: result.p99Latency,
+        totalRequests: result.requests,
+        testDuration: result.duration,
+        actualRate: result.rate,
+        throughput: result.throughput,
+        bytesIn: result.bytesIn,
+        bytesOut: result.bytesOut,
+        statusCodes: result.statusCodes ? JSON.stringify(result.statusCodes) : null,
+        errorDetails: result.errors ? JSON.stringify(result.errors) : null,
       },
     });
 
@@ -135,13 +161,27 @@ async function getResults(
       return reply.code(404).send({ error: 'Test result not found' });
     }
 
-    // Return in the format expected by the dashboard
+    // Return in the format expected by the dashboard with all detailed metrics
     return reply.send({
       id: execution.id,
-      avgLatency: execution.avgLatency,
-      p95Latency: execution.p95Latency,
-      successRate: execution.successRate,
+      testId: execution.id, // For backwards compatibility
+      avgLatency: execution.avgLatency ? Math.round(execution.avgLatency / 1000000) : 0,
+      p95Latency: execution.p95Latency ? Math.round(execution.p95Latency / 1000000) : 0,
+      successRate: execution.successRate || 0,
       timestamp: execution.resultTimestamp?.toISOString() || execution.updatedAt.toISOString(),
+      // Detailed metrics from Vegeta
+      minLatency: execution.minLatency ? Math.round(execution.minLatency / 1000000) : undefined,
+      maxLatency: execution.maxLatency ? Math.round(execution.maxLatency / 1000000) : undefined,
+      p50Latency: execution.p50Latency ? Math.round(execution.p50Latency / 1000000) : undefined,
+      p99Latency: execution.p99Latency ? Math.round(execution.p99Latency / 1000000) : undefined,
+      totalRequests: execution.totalRequests || undefined,
+      testDuration: execution.testDuration || undefined,
+      actualRate: execution.actualRate || undefined,
+      throughput: execution.throughput || undefined,
+      bytesIn: execution.bytesIn || undefined,
+      bytesOut: execution.bytesOut || undefined,
+      statusCodes: execution.statusCodes ? JSON.parse(execution.statusCodes) : undefined,
+      errorDetails: execution.errorDetails ? JSON.parse(execution.errorDetails) : undefined,
     });
   } catch (error) {
     request.log.error(error, 'Error fetching test result');
@@ -177,11 +217,24 @@ async function listResults(
       .filter((exec: any) => exec.avgLatency !== null)
       .map((exec: any) => ({
         id: exec.id,
-        avgLatency: exec.avgLatency,
-        p95Latency: exec.p95Latency,
-        successRate: exec.successRate,
-        timestamp:
-          exec.resultTimestamp?.toISOString() || exec.updatedAt.toISOString(),
+        testId: exec.id, // For backwards compatibility
+        avgLatency: exec.avgLatency ? Math.round(exec.avgLatency / 1000000) : 0,
+        p95Latency: exec.p95Latency ? Math.round(exec.p95Latency / 1000000) : 0,
+        successRate: exec.successRate || 0,
+        timestamp: exec.resultTimestamp?.toISOString() || exec.updatedAt.toISOString(),
+        // Detailed metrics from Vegeta
+        minLatency: exec.minLatency ? Math.round(exec.minLatency / 1000000) : undefined,
+        maxLatency: exec.maxLatency ? Math.round(exec.maxLatency / 1000000) : undefined,
+        p50Latency: exec.p50Latency ? Math.round(exec.p50Latency / 1000000) : undefined,
+        p99Latency: exec.p99Latency ? Math.round(exec.p99Latency / 1000000) : undefined,
+        totalRequests: exec.totalRequests || undefined,
+        testDuration: exec.testDuration || undefined,
+        actualRate: exec.actualRate || undefined,
+        throughput: exec.throughput || undefined,
+        bytesIn: exec.bytesIn || undefined,
+        bytesOut: exec.bytesOut || undefined,
+        statusCodes: exec.statusCodes ? JSON.parse(exec.statusCodes) : undefined,
+        errorDetails: exec.errorDetails ? JSON.parse(exec.errorDetails) : undefined,
       }));
 
     return reply.send(response);

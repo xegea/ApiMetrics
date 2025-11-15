@@ -77,7 +77,32 @@ async function getLoadTestExecutions(
 
   const loadTestExecutions = await (prisma as any).loadTestExecution.findMany({
     where,
-    include: {
+    select: {
+      id: true,
+      tenantId: true,
+      userId: true,
+      executionPlanId: true,
+      name: true,
+      status: true,
+      avgLatency: true,
+      p95Latency: true,
+      successRate: true,
+      resultTimestamp: true,
+      // Comprehensive metrics from Vegeta
+      minLatency: true,
+      maxLatency: true,
+      p50Latency: true,
+      p99Latency: true,
+      totalRequests: true,
+      testDuration: true,
+      actualRate: true,
+      throughput: true,
+      bytesIn: true,
+      bytesOut: true,
+      statusCodes: true,
+      errorDetails: true,
+      createdAt: true,
+      updatedAt: true,
       executionPlan: true,
     },
     orderBy: {
@@ -85,8 +110,15 @@ async function getLoadTestExecutions(
     },
   });
 
+  // Parse JSON fields for each execution
+  const parsedExecutions = loadTestExecutions.map((execution: any) => ({
+    ...execution,
+    statusCodes: execution.statusCodes ? JSON.parse(execution.statusCodes) : null,
+    errorDetails: execution.errorDetails ? JSON.parse(execution.errorDetails) : null,
+  }));
+
   reply.send({
-    loadTestExecutions,
+    loadTestExecutions: parsedExecutions,
   });
 }
 
@@ -120,7 +152,14 @@ async function getLoadTestExecution(
     return reply.status(404).send({ message: 'Load test execution not found' });
   }
 
-  reply.send(loadTestExecution);
+  // Parse JSON fields
+  const parsedExecution = {
+    ...loadTestExecution,
+    statusCodes: loadTestExecution.statusCodes ? JSON.parse(loadTestExecution.statusCodes) : null,
+    errorDetails: loadTestExecution.errorDetails ? JSON.parse(loadTestExecution.errorDetails) : null,
+  };
+
+  reply.send(parsedExecution);
 }
 
 /**
@@ -161,6 +200,19 @@ async function getLoadTestExecutionResults(
         p95Latency: loadTestExecution.p95Latency,
         successRate: loadTestExecution.successRate,
         timestamp: loadTestExecution.resultTimestamp?.toISOString() || loadTestExecution.updatedAt.toISOString(),
+        // Comprehensive metrics from Vegeta
+        minLatency: loadTestExecution.minLatency,
+        maxLatency: loadTestExecution.maxLatency,
+        p50Latency: loadTestExecution.p50Latency,
+        p99Latency: loadTestExecution.p99Latency,
+        totalRequests: loadTestExecution.totalRequests,
+        testDuration: loadTestExecution.testDuration,
+        actualRate: loadTestExecution.actualRate,
+        throughput: loadTestExecution.throughput,
+        bytesIn: loadTestExecution.bytesIn,
+        bytesOut: loadTestExecution.bytesOut,
+        statusCodes: loadTestExecution.statusCodes ? JSON.parse(loadTestExecution.statusCodes) : null,
+        errorDetails: loadTestExecution.errorDetails ? JSON.parse(loadTestExecution.errorDetails) : null,
       },
     ],
   });
