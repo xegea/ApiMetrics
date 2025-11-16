@@ -9,6 +9,26 @@ interface CreateLoadTestExecutionBody {
   name: string;
 }
 
+interface CreateTestResultBody {
+  testId: string;
+  avgLatency?: number;
+  p95Latency?: number;
+  successRate?: number;
+  timestamp: string;
+  minLatency?: number;
+  maxLatency?: number;
+  p50Latency?: number;
+  p99Latency?: number;
+  totalRequests?: number;
+  testDuration?: string;
+  actualRate?: number;
+  throughput?: number;
+  bytesIn?: number;
+  bytesOut?: number;
+  statusCodes?: string;
+  errorDetails?: string;
+}
+
 interface GetLoadTestExecutionsParams {
   executionPlanId?: string;
 }
@@ -29,26 +49,20 @@ async function createLoadTestExecution(
 
   const { executionPlanId, name } = request.body;
 
-  // Verify the execution plan exists and belongs to the tenant
-  const executionPlan = await prisma.executionPlan.findFirst({
-    where: {
-      id: executionPlanId,
-      tenantId: ensured.tenantId,
-    },
-  });
+  const createData: any = {
+    tenantId: ensured.tenantId,
+    userId: ensured.userId,
+    name,
+    status: 'running',
+  };
 
-  if (!executionPlan) {
-    return reply.status(404).send({ message: 'Execution plan not found' });
+  // Only include executionPlanId if it's provided
+  if (executionPlanId) {
+    createData.executionPlanId = executionPlanId;
   }
 
   const loadTestExecution = await prisma.loadTestExecution.create({
-    data: {
-      tenantId: ensured.tenantId,
-      userId: ensured.userId,
-      executionPlanId,
-      name,
-      status: 'running',
-    },
+    data: createData,
   });
 
   reply.send(loadTestExecution);
@@ -331,6 +345,80 @@ async function deleteLoadTestExecution(
 }
 
 /**
+ * POST /loadtestsexecutions/:id/loadtests
+ * Create a new loadtest result for a load test execution
+ */
+async function createTestResult(
+  request: FastifyRequest<{ Params: { id: string }; Body: CreateTestResultBody }>,
+  reply: FastifyReply
+) {
+  const user = (request as any).user;
+  const ensured = await ensureUserAndTenant({
+    userId: user.userId,
+    email: user.email ?? `unknown+${user.userId}@example.com`,
+  });
+
+  const { id } = request.params;
+  const {
+    testId,
+    avgLatency,
+    p95Latency,
+    successRate,
+    timestamp,
+    minLatency,
+    maxLatency,
+    p50Latency,
+    p99Latency,
+    totalRequests,
+    testDuration,
+    actualRate,
+    throughput,
+    bytesIn,
+    bytesOut,
+    statusCodes,
+    errorDetails,
+  } = request.body;
+
+  // Verify the execution exists and belongs to the tenant
+  const execution = await prisma.loadTestExecution.findFirst({
+    where: {
+      id,
+      tenantId: ensured.tenantId,
+    },
+  });
+
+  if (!execution) {
+    return reply.status(404).send({ message: 'Load test execution not found' });
+  }
+
+  // Create the test result
+  const testResult = await prisma.testResult.create({
+    data: {
+      loadTestExecutionId: id,
+      testId,
+      avgLatency,
+      p95Latency,
+      successRate,
+      timestamp: new Date(timestamp),
+      minLatency,
+      maxLatency,
+      p50Latency,
+      p99Latency,
+      totalRequests,
+      testDuration,
+      actualRate,
+      throughput,
+      bytesIn,
+      bytesOut,
+      statusCodes,
+      errorDetails,
+    },
+  });
+
+  reply.status(201).send(testResult);
+}
+
+/**
  * GET /loadtestsexecutions/:id/download
  * Download a JSON execution plan with embedded JWT token
  * User runs: npx @xegea/apimetrics-cli execute-plan <file.json>
@@ -377,9 +465,10 @@ async function downloadLoadTestExecution(
   const executionPlan: any = {
     metadata: {
       name: loadTestExecution.name,
-      planName: loadTestExecution.executionPlan.name,
+      planName: loadTestExecution.executionPlan?.name || 'Load Test Plan',
       createdAt: loadTestExecution.createdAt.toISOString(),
       description: 'Execution plan for ApiMetrics load testing',
+      executionId: loadTestExecution.id, // Include the LoadTestExecution ID
     },
     authentication: {
       token: jwtToken,
@@ -387,17 +476,17 @@ async function downloadLoadTestExecution(
       note: 'This token is your personal access token. Do not share this file.',
     },
     tests: [{
-      id: loadTestExecution.executionPlan.id, // Use the execution plan ID
+      id: loadTestExecution.executionPlan?.id || 'default-test', // Use the execution plan ID if available
       name: loadTestExecution.name,
-      requests: loadTestExecution.executionPlan.testRequests.map((testRequest: any) => ({
+      requests: loadTestExecution.executionPlan?.testRequests?.map((testRequest: any) => ({
         method: testRequest.httpMethod,
         target: testRequest.endpoint,
         description: `${testRequest.httpMethod} request to ${testRequest.endpoint}`,
-      })),
+      })) || [],
       rps: 10,
-      duration: loadTestExecution.executionPlan.executionTime || '1m',
-      iterations: loadTestExecution.executionPlan.iterations || 1,
-      delayBetweenRequests: loadTestExecution.executionPlan.delayBetweenRequests || '100ms',
+      duration: loadTestExecution.executionPlan?.executionTime || '1m',
+      iterations: loadTestExecution.executionPlan?.iterations || 1,
+      delayBetweenRequests: loadTestExecution.executionPlan?.delayBetweenRequests || '100ms',
     }],
   };
 
@@ -405,7 +494,7 @@ async function downloadLoadTestExecution(
   // Create a unique filename using timestamp and random suffix for each download
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', '');
   const randomSuffix = Math.random().toString(36).substring(2, 8); // 6-character random string
-  const sanitizedPlanName = loadTestExecution.executionPlan.name
+  const sanitizedPlanName = (loadTestExecution.executionPlan?.name || loadTestExecution.name)
     .replace(/\s+/g, '-') // Replace spaces with hyphens
     .replace(/[^a-zA-Z0-9\-_]/g, '') // Remove special characters
     .toLowerCase(); // Convert to lowercase
@@ -417,10 +506,14 @@ async function downloadLoadTestExecution(
   console.log('DEBUG: Timestamp:', timestamp);
   console.log('DEBUG: Random suffix:', randomSuffix);
 
+  // Determine if this is a local development environment
+  const isLocal = request.hostname === 'localhost' || request.hostname === '127.0.0.1' || request.hostname?.startsWith('localhost:');
+  const envFlag = isLocal ? ' --env local' : '';
+
   // Add instructions with the exact filename (no wildcards)
   executionPlan.instructions = {
     step1: 'Install Node.js from https://nodejs.org if you do not have it',
-    step2: `Open Terminal and run: npx @xegea/apimetrics-cli execute-plan ~/Downloads/${fileName}`,
+    step2: `Open Terminal and run: npx @xegea/apimetrics-cli execute-plan ~/Downloads/${fileName}${envFlag}`,
     step3: 'Results will be automatically uploaded to your ApiMetrics dashboard',
   };
 
@@ -458,6 +551,11 @@ export async function loadTestExecutionsRoutes(fastify: FastifyInstance) {
   fastify.put('/loadtestsexecutions/:id', {
     preHandler: verifyToken,
     handler: updateLoadTestExecution,
+  });
+
+  fastify.post('/loadtestsexecutions/:id/loadtests', {
+    preHandler: verifyToken,
+    handler: createTestResult,
   });
 
   fastify.delete('/loadtestsexecutions/:id', {

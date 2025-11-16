@@ -60,6 +60,221 @@ interface CommandModalState {
   actualFilename?: string;
 }
 
+interface LoadTestResultCardProps {
+  loadtest: Execution;
+  index: number;
+}
+
+function LoadTestResultCard({ loadtest, index }: LoadTestResultCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const formatLatency = (nanoseconds?: number) => {
+    if (!nanoseconds) return 'N/A';
+    return `${(nanoseconds / 1000000).toFixed(2)}ms`;
+  };
+
+  const formatBytes = (bytes?: number) => {
+    if (!bytes) return 'N/A';
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-50 border-green-200';
+      case 'failed':
+        return 'bg-red-50 border-red-200';
+      default:
+        return 'bg-blue-50 border-blue-200';
+    }
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'failed':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-blue-100 text-blue-800';
+    }
+  };
+
+  return (
+    <div className={`border rounded-lg ${getStatusColor(loadtest.status)}`}>
+      {/* Header */}
+      <div
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between p-4 cursor-pointer hover:bg-opacity-75 transition-all"
+      >
+        <div className="flex items-center gap-4 flex-1">
+          {isExpanded ? (
+            <ExpandMoreIcon className="text-gray-600" />
+          ) : (
+            <ChevronRightIcon className="text-gray-600" />
+          )}
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-1">
+              <span className="font-semibold text-gray-800">Test #{index}</span>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(loadtest.status)}`}>
+                {loadtest.status}
+              </span>
+            </div>
+            <div className="text-sm text-gray-600 space-y-1">
+              <div>Started: {new Date(loadtest.startedAt).toLocaleString()}</div>
+              {loadtest.avgLatency && (
+                <div className="flex gap-4">
+                  <span>Avg: {formatLatency(loadtest.avgLatency)}</span>
+                  <span>P95: {formatLatency(loadtest.p95Latency)}</span>
+                  <span>Success: {(loadtest.successRate ? loadtest.successRate * 100 : 0).toFixed(1)}%</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded Content */}
+      {isExpanded && (
+        <div className="border-t p-4 space-y-6">
+          {/* Request Metrics */}
+          {loadtest.totalRequests && (
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">Request Metrics</h3>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+                  <div className="flex flex-col items-center">
+                    <div className="text-2xl font-bold text-blue-600 mb-1">{loadtest.totalRequests}</div>
+                    <div className="text-sm text-blue-800 font-medium">Total Requests</div>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="text-2xl font-bold text-green-600 mb-1">{(loadtest.successRate ? loadtest.successRate * 100 : 0).toFixed(1)}%</div>
+                    <div className="text-sm text-green-800 font-medium">Success Rate</div>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="text-2xl font-bold text-purple-600 mb-1">{loadtest.testDuration}</div>
+                    <div className="text-sm text-purple-800 font-medium">Duration</div>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="text-2xl font-bold text-orange-600 mb-1">{loadtest.actualRate?.toFixed(2)}</div>
+                    <div className="text-sm text-orange-800 font-medium">RPS</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Throughput & Data Transfer */}
+          {(loadtest.throughput || loadtest.bytesIn || loadtest.bytesOut) && (
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">Throughput & Data</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                {loadtest.throughput !== undefined && (
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-gray-600">Throughput</div>
+                    <div className="font-semibold text-lg text-gray-900">{loadtest.throughput.toFixed(2)} req/s</div>
+                  </div>
+                )}
+                {loadtest.bytesIn !== undefined && (
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-gray-600">Bytes In</div>
+                    <div className="font-semibold text-lg text-gray-900">{formatBytes(loadtest.bytesIn)}</div>
+                  </div>
+                )}
+                {loadtest.bytesOut !== undefined && (
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-gray-600">Bytes Out</div>
+                    <div className="font-semibold text-lg text-gray-900">{formatBytes(loadtest.bytesOut)}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Performance Metrics */}
+          {loadtest.avgLatency && (
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">Performance Metrics</h3>
+              <div className="space-y-4">
+                {/* First row: Avg, Min, Max Latency */}
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-gray-600">Avg Latency</div>
+                    <div className="font-semibold text-lg text-gray-900">{formatLatency(loadtest.avgLatency)}</div>
+                  </div>
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-gray-600">Min Latency</div>
+                    <div className="font-semibold text-lg text-gray-900">{formatLatency(loadtest.minLatency)}</div>
+                  </div>
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-gray-600">Max Latency</div>
+                    <div className="font-semibold text-lg text-gray-900">{formatLatency(loadtest.maxLatency)}</div>
+                  </div>
+                </div>
+                {/* Second row: P50, P95, P99 Latency */}
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-gray-600">P50 Latency</div>
+                    <div className="font-semibold text-lg text-gray-900">{formatLatency(loadtest.p50Latency)}</div>
+                  </div>
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-gray-600">P95 Latency</div>
+                    <div className="font-semibold text-lg text-gray-900">{formatLatency(loadtest.p95Latency)}</div>
+                  </div>
+                  <div className="bg-white p-3 rounded border border-gray-200">
+                    <div className="text-gray-600">P99 Latency</div>
+                    <div className="font-semibold text-lg text-gray-900">{formatLatency(loadtest.p99Latency)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Status Codes */}
+          {loadtest.statusCodes && Object.keys(loadtest.statusCodes).length > 0 && (
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">Status Codes</h3>
+              <div className="space-y-2">
+                {Object.entries(loadtest.statusCodes).map(([code, count]) => (
+                  <div key={code} className="flex items-center justify-between bg-white p-3 rounded border border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        parseInt(code) >= 200 && parseInt(code) < 300 ? 'bg-green-100 text-green-800' :
+                        parseInt(code) >= 400 && parseInt(code) < 500 ? 'bg-yellow-100 text-yellow-800' :
+                        parseInt(code) >= 500 ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {code}
+                      </span>
+                      <span className="text-gray-600">HTTP {code}</span>
+                      <span className="font-semibold text-blue-600">({Number(count)} requests)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Errors */}
+          {loadtest.errorDetails && loadtest.errorDetails.length > 0 && (
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">Errors</h3>
+              <div className="space-y-2">
+                {loadtest.errorDetails.map((error, idx) => (
+                  <div key={idx} className="bg-red-50 border border-red-200 p-3 rounded text-sm text-red-800">
+                    {error}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LoadTestsExecutionsPage() {
   const { session } = useAuth();
   const searchParams = useSearchParams();
@@ -238,43 +453,14 @@ function LoadTestsExecutionsPage() {
                   <div className="p-4">
                     {/* Loadtests list */}
                     {execution.loadtests && execution.loadtests.length > 0 ? (
-                      <div className="space-y-2">
-                        {execution.loadtests.map((loadtest) => (
-                          <div key={loadtest.id} className="bg-gray-50 border rounded p-3">
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <span className="font-medium">{loadtest.command}</span>
-                                <div className="text-sm text-gray-500">
-                                  Status: {loadtest.status} • Started: {new Date(loadtest.startedAt).toLocaleString()}
-                                  {loadtest.completedAt && ` • Completed: ${new Date(loadtest.completedAt).toLocaleString()}`}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                      <div className="space-y-3">
+                        {execution.loadtests.map((loadtest, index) => (
+                          <LoadTestResultCard key={loadtest.id} loadtest={loadtest} index={index + 1} />
                         ))}
                       </div>
                     ) : (
                       <div className="text-center py-8 text-gray-500">
                         No load tests found for this load test execution.
-                      </div>
-                    )}
-
-                    {/* Results section - show results for each completed loadtest */}
-                    {execution.loadtests && execution.loadtests.some(loadtest => loadtest.status === 'completed' && loadtest.avgLatency) && (
-                      <div className="mt-4 space-y-4">
-                        {execution.loadtests
-                          .filter(loadtest => loadtest.status === 'completed' && loadtest.avgLatency)
-                          .map((loadtest) => (
-                            <div key={loadtest.id} className="p-4 bg-green-50 border border-green-200 rounded">
-                              <h4 className="font-medium text-green-800 mb-2">Test Results - {loadtest.command}</h4>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                <div>Avg Latency: {(loadtest.avgLatency! / 1000000).toFixed(2)}ms</div>
-                                <div>P95 Latency: {(loadtest.p95Latency! / 1000000).toFixed(2)}ms</div>
-                                <div>Success Rate: {(loadtest.successRate! * 100).toFixed(1)}%</div>
-                                <div>Total Requests: {loadtest.totalRequests}</div>
-                              </div>
-                            </div>
-                          ))}
                       </div>
                     )}
                   </div>

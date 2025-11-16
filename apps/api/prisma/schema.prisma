@@ -37,7 +37,7 @@ model LoadTestExecution {
   id              String   @id @default(uuid())
   tenantId        String
   userId          String
-  executionPlanId String
+  executionPlanId String?  // Optional: execution plan is just a template reference
   name            String   // e.g., "Plan Name - 2023-11-10 14:30:00"
   status          String   @default("running") // running, completed, failed
   // Summary metrics from latest test result
@@ -63,7 +63,7 @@ model LoadTestExecution {
 
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   tenant        Tenant        @relation(fields: [tenantId], references: [id])
-  executionPlan ExecutionPlan @relation(fields: [executionPlanId], references: [id])
+  executionPlan ExecutionPlan? @relation(fields: [executionPlanId], references: [id])
   testResults   TestResult[]  @relation("ExecutionToResults")
 
   @@index([tenantId])
