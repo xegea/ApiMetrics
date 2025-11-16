@@ -143,7 +143,11 @@ function LoadTestsExecutionsPage() {
 
   const openCommandModal = (executionName: string, filename?: string, instructions?: any) => {
     // Use instructions from the downloaded file if available
-    const command = instructions?.step2 || `npx @xegea/apimetrics-cli execute-plan ~/Downloads/${filename || 'execution-plan-*.json'}`;
+    let command = instructions?.step2 || `npx @xegea/apimetrics-cli execute-plan ~/Downloads/${filename || 'execution-plan-*.json'}`;
+    // Extract just the command part (remove "Open Terminal and run: " prefix if present)
+    if (command.startsWith('Open Terminal and run: ')) {
+      command = command.substring('Open Terminal and run: '.length);
+    }
     setCommandModal({
       isOpen: true,
       command,
@@ -327,23 +331,26 @@ function LoadTestsExecutionsPage() {
                 <p className="text-gray-600 ml-10 mb-3">Paste this command in your terminal (macOS, Linux, or Windows) to run the load tests:</p>
                 
                 {/* Command Box */}
-                <div className="ml-10 bg-gray-900 rounded-lg p-4 font-mono text-sm text-gray-100 flex items-center justify-between gap-4">
-                  <code className="flex-1 break-all">{commandModal.command}</code>
-                  <button
-                    onClick={copyToClipboard}
-                    className={`flex-shrink-0 p-2 rounded transition-colors ${
-                      copyFeedback
-                        ? 'bg-green-500 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                    title="Copy to clipboard"
-                  >
-                    {copyFeedback ? (
-                      <span className="text-sm font-semibold">✓ Copied!</span>
-                    ) : (
-                      <FileCopyIcon fontSize="small" />
-                    )}
-                  </button>
+                <div className="ml-10">
+                  <p className="text-gray-700 mb-2">Open Terminal and run:</p>
+                  <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm text-gray-100 flex items-center justify-between gap-4">
+                    <code className="flex-1 break-all">{commandModal.command}</code>
+                    <button
+                      onClick={copyToClipboard}
+                      className={`flex-shrink-0 p-2 rounded transition-colors ${
+                        copyFeedback
+                          ? 'bg-green-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                      title="Copy to clipboard"
+                    >
+                      {copyFeedback ? (
+                        <span className="text-sm font-semibold">✓ Copied!</span>
+                      ) : (
+                        <FileCopyIcon fontSize="small" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
 
