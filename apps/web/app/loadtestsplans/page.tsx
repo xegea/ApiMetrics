@@ -97,6 +97,9 @@ function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete
             <div className="w-4 h-0.5 bg-gray-400 mb-1"></div>
             <div className="w-4 h-0.5 bg-gray-400"></div>
           </div>
+          <span className={`${getMethodColor(request.httpMethod)} text-white px-3 py-1 rounded font-bold text-sm ${['DELETE', 'PATCH'].includes(request.httpMethod) ? 'w-20' : 'w-16'} text-center`}>
+            {request.httpMethod}
+          </span>
           <span className="text-md font-medium text-gray-800">{baseUrl}</span>
         </div>
         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
