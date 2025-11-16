@@ -131,7 +131,7 @@ function LoadTestResultCard({ loadtest, index, isExpanded, onToggle }: LoadTestR
               </span>
             </div>
             <div className="text-sm text-gray-600 space-y-1">
-              <div>Started: {new Date(loadtest.startedAt).toLocaleString()}</div>
+              <div>Started: {new Date(loadtest.startedAt).toISOString().split('T')[0]} {new Date(loadtest.startedAt).toISOString().split('T')[1].split('.')[0]}</div>
               {loadtest.avgLatency && (
                 <div className="flex gap-4">
                   <span>Avg: {formatLatency(loadtest.avgLatency)}</span>
@@ -361,7 +361,8 @@ function LoadTestsExecutionsPage() {
   };
 
   const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString();
+    const date = new Date(timestamp);
+    return date.toISOString().replace('T', ' ').split('.')[0];
   };
 
   const openCommandModal = (executionName: string, filename?: string, instructions?: any) => {
@@ -462,7 +463,7 @@ function LoadTestsExecutionsPage() {
                     <div>
                       <span className="text-lg font-medium text-gray-800">{execution.name}</span>
                       <div className="text-sm text-gray-500">
-                        {execution.createdAt && `Created: ${new Date(execution.createdAt).toLocaleString()}`}
+                        {execution.createdAt && `Created: ${new Date(execution.createdAt).toISOString().split('T')[0]} ${new Date(execution.createdAt).toISOString().split('T')[1].split('.')[0]}`}
                       </div>
                       {execution.planName && (
                         <div className="text-sm text-gray-600 mt-1">
