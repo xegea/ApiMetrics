@@ -250,6 +250,55 @@ async function listResults(
   }
 }
 
+/**
+ * DELETE /results/:id
+ * Delete a specific test result
+ */
+async function deleteResult(
+  request: FastifyRequest<{ Params: GetResultsParams }>,
+  reply: FastifyReply
+) {
+  try {
+    const user = (request as any).user;
+    if (!user?.userId) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    const ensured = await ensureUserAndTenant({
+      userId: user.userId,
+      email: user.email ?? 'unknown@example.com',
+    });
+
+    const { id } = request.params;
+
+    // First check if the result exists and belongs to the user's tenant
+    const result = await (prisma as any).testResult.findFirst({
+      where: {
+        id,
+        loadTestExecution: {
+          tenantId: ensured.tenantId
+        }
+      },
+      include: {
+        loadTestExecution: true
+      }
+    });
+
+    if (!result) {
+      return reply.code(404).send({ error: 'Test result not found' });
+    }
+
+    // Delete the test result
+    await (prisma as any).testResult.delete({
+      where: { id }
+    });
+
+    return reply.send({ success: true });
+  } catch (error) {
+    request.log.error(error, 'Error deleting test result');
+    return reply.code(500).send({ error: 'Failed to delete test result' });
+  }
+}
+
 export async function resultsRoutes(fastify: FastifyInstance) {
   // POST requires authentication to prevent unauthorized submissions
   fastify.post<{ Body: PostResultsBody | Buffer }>(
@@ -261,11 +310,17 @@ export async function resultsRoutes(fastify: FastifyInstance) {
   // Note: GET /results and GET /results/:id endpoints removed
   // Results are now accessed through /loadtestsexecutions/:id which includes test results
   
-  // fastify.get('/results', { preHandler: verifyToken }, listResults);
-  // fastify.get<{ Params: GetResultsParams }>(
-  //   '/results/:id',
-  //   { preHandler: verifyToken },
-  //   getResults
-  // );
+  fastify.get('/results', { preHandler: verifyToken }, listResults);
+  fastify.get<{ Params: GetResultsParams }>(
+    '/results/:id',
+    { preHandler: verifyToken },
+    getResults
+  );
+
+  fastify.delete<{ Params: GetResultsParams }>(
+    '/results/:id',
+    { preHandler: verifyToken },
+    deleteResult
+  );
 }
 

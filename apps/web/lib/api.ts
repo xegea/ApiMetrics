@@ -91,6 +91,13 @@ export async function getTestResult(id: string): Promise<TestResult> {
   return fetchAPI<TestResult>(`/results/${id}`, { requireAuth: true });
 }
 
+export async function deleteTestResult(id: string): Promise<void> {
+  return fetchAPI<void>(`/results/${id}`, { 
+    method: 'DELETE',
+    requireAuth: true 
+  });
+}
+
 // Seed random test results for the current authenticated user's tenant
 export interface SeedResultsResponse {
   inserted: number;

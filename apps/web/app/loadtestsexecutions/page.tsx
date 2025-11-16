@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { getLoadTestExecutions, deleteLoadTestExecution, downloadLoadTestExecution } from '@/lib/api';
+import { getLoadTestExecutions, deleteLoadTestExecution, downloadLoadTestExecution, deleteTestResult } from '@/lib/api';
 
 interface Execution {
   id: string;
@@ -72,9 +72,10 @@ interface LoadTestResultCardProps {
   index: number;
   isExpanded: boolean;
   onToggle: () => void;
+  onDelete: () => void;
 }
 
-function LoadTestResultCard({ loadtest, index, isExpanded, onToggle }: LoadTestResultCardProps) {
+function LoadTestResultCard({ loadtest, index, isExpanded, onToggle, onDelete }: LoadTestResultCardProps) {
 
   const formatLatency = (nanoseconds?: number) => {
     if (!nanoseconds) return 'N/A';
@@ -111,13 +112,13 @@ function LoadTestResultCard({ loadtest, index, isExpanded, onToggle }: LoadTestR
   };
 
   return (
-    <div className={`border rounded-lg ${getStatusColor(loadtest.status)}`}>
+    <div className={`border rounded-lg ${getStatusColor(loadtest.status)} group relative`}>
       {/* Header */}
-      <div
-        onClick={onToggle}
-        className="flex items-center justify-between p-4 cursor-pointer hover:bg-opacity-75 transition-all"
-      >
-        <div className="flex items-center gap-4 flex-1">
+      <div className="flex items-center justify-between p-4">
+        <div
+          onClick={onToggle}
+          className="flex items-center gap-4 flex-1 cursor-pointer hover:bg-opacity-75 transition-all"
+        >
           {isExpanded ? (
             <ExpandMoreIcon className="text-gray-600" />
           ) : (
@@ -142,6 +143,13 @@ function LoadTestResultCard({ loadtest, index, isExpanded, onToggle }: LoadTestR
             </div>
           </div>
         </div>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+          className="p-1 rounded text-gray-600 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity" 
+          title="Delete Test"
+        >
+          <DeleteIcon fontSize="small" />
+        </button>
       </div>
 
       {/* Expanded Content */}
@@ -403,6 +411,23 @@ function LoadTestsExecutionsPage() {
     }
   };
 
+  const handleDeleteTestResult = async (testResultId: string, executionId: string) => {
+    if (window.confirm('Are you sure you want to delete this test result? This action cannot be undone.')) {
+      try {
+        await deleteTestResult(testResultId);
+        // Update local state to remove the deleted test result without full refresh
+        setLoadTestExecutions(prev => prev.map(execution => 
+          execution.id === executionId 
+            ? { ...execution, loadtests: execution.loadtests.filter(test => test.id !== testResultId) }
+            : execution
+        ));
+      } catch (error) {
+        console.error('Failed to delete test result:', error);
+        alert('Failed to delete test result. Please try again.');
+      }
+    }
+  };
+
   const handleRefreshExecution = async (executionId: string) => {
     try {
       // Refresh all executions without showing global loading state
@@ -657,6 +682,7 @@ function LoadTestsExecutionsPage() {
                               index={execution.loadtests.length - index}
                               isExpanded={expandedLoadTest === loadtest.id}
                               onToggle={() => setExpandedLoadTest(prev => prev === loadtest.id ? null : loadtest.id)}
+                              onDelete={() => handleDeleteTestResult(loadtest.id, execution.id)}
                             />
                           ))}
                       </div>

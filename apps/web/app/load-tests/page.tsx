@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
-import { getMe, getTestResults } from '@/lib/api';
+import { getMe, getTestResults, deleteTestResult } from '@/lib/api';
 import { TestResult } from '@apimetrics/shared';
 import { formatTimestamp, formatPercentage } from '@apimetrics/shared';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 export default function LoadTestsPage() {
   const { user } = useAuth();
@@ -12,6 +13,7 @@ export default function LoadTestsPage() {
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<TestResult[]>([]);
+  const [hoveredResultId, setHoveredResultId] = useState<string | null>(null);
 
   // Fetch the user's tenant id from the API
   useEffect(() => {
@@ -36,6 +38,21 @@ export default function LoadTestsPage() {
       return;
     }
     setCurrentTenantId(tenantId);
+  };
+
+  const handleDeleteResult = async (resultId: string) => {
+    if (!confirm('Are you sure you want to delete this test result?')) {
+      return;
+    }
+
+    try {
+      await deleteTestResult(resultId);
+      // Remove the result from the local state
+      setResults(results.filter(result => result.id !== resultId));
+    } catch (error) {
+      console.error('Failed to delete test result:', error);
+      alert('Failed to delete test result. Please try again.');
+    }
   };
 
   return (
@@ -66,9 +83,24 @@ export default function LoadTestsPage() {
               <div className="space-y-4">
                 {results.map((result, index) => (
                   <div key={`${result.id}-${index}`} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-2">
+                    <div 
+                      className="flex justify-between items-start mb-2 relative group cursor-pointer"
+                      onMouseEnter={() => setHoveredResultId(result.id)}
+                      onMouseLeave={() => setHoveredResultId(null)}
+                    >
                       <h3 className="text-lg font-medium text-gray-800">Test ID: {result.id}</h3>
-                      <span className="text-sm text-gray-500">{formatTimestamp(result.timestamp)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500">{formatTimestamp(result.timestamp)}</span>
+                        {hoveredResultId === result.id && (
+                          <button
+                            onClick={() => handleDeleteResult(result.id)}
+                            className="text-red-500 hover:text-red-700 transition-colors p-1 rounded hover:bg-red-50"
+                            title="Delete test result"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
