@@ -1,4 +1,4 @@
-import { TestResult, LoadTestExecution, ExecutionPlan } from '@apimetrics/shared';
+import { TestResult, LoadTestExecution } from '@apimetrics/shared';
 import { supabase } from './supabase';
 
 const API_URL = process.env.NEXT_PUBLIC_APIMETRICS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';

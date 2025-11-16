@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { getLoadTestExecutions, getLoadTestExecutionResults, deleteLoadTestExecution, downloadLoadTestExecution } from '@/lib/api';
-import { ExecutionPlan, LoadTestExecution, TestResult } from '@apimetrics/shared';
+import { getLoadTestExecutions, deleteLoadTestExecution, downloadLoadTestExecution } from '@/lib/api';
 
 interface Execution {
   id: string;
@@ -33,6 +32,14 @@ interface Execution {
   errorDetails?: string[]; // Error details
 }
 
+interface LoadTestExecution {
+  id: string;
+  name: string;
+  loadTestPlanId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface LoadTestExecutionWithExecutions extends LoadTestExecution {
   loadtests: Execution[];
 }
@@ -60,7 +67,6 @@ function LoadTestsExecutionsPage() {
   const [loadTestExecutions, setLoadTestExecutions] = useState<LoadTestExecutionWithExecutions[]>([]);
   const [expandedPlans, setExpandedPlans] = useState<string[]>([]);
   const [expandedExecutions, setExpandedExecutions] = useState<string[]>([]);
-  const [executionResults, setExecutionResults] = useState<Record<string, any>>({});
   const [commandModal, setCommandModal] = useState<CommandModalState>({
     isOpen: false,
     command: '',
@@ -123,18 +129,8 @@ function LoadTestsExecutionsPage() {
         : [...prev, executionId]
     );
 
-    // Fetch results when expanding
-    if (isExpanding) {
-      try {
-        const response = await getLoadTestExecutionResults(executionId);
-        setExecutionResults(prev => ({
-          ...prev,
-          [executionId]: response.result,
-        }));
-      } catch (error) {
-        console.error('Failed to fetch execution results:', error);
-      }
-    }
+    // Results are already included in the execution data via loadtests array
+    // No need to fetch separately
   };
 
   const formatTimestamp = (timestamp: string) => {

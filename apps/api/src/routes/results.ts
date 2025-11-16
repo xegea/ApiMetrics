@@ -258,14 +258,14 @@ export async function resultsRoutes(fastify: FastifyInstance) {
     postResults
   );
 
-  fastify.get('/results', { preHandler: verifyToken }, listResults);
-  fastify.get<{ Params: GetResultsParams }>(
-    '/results/:id',
-    { preHandler: verifyToken },
-    getResults
-  );
-
-  // Note: /results/seed endpoint would create LoadTestExecutions instead
-  // This is removed as it's not needed with the new flow
+  // Note: GET /results and GET /results/:id endpoints removed
+  // Results are now accessed through /loadtestsexecutions/:id which includes test results
+  
+  // fastify.get('/results', { preHandler: verifyToken }, listResults);
+  // fastify.get<{ Params: GetResultsParams }>(
+  //   '/results/:id',
+  //   { preHandler: verifyToken },
+  //   getResults
+  // );
 }
 

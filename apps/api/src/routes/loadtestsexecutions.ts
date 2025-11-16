@@ -56,7 +56,7 @@ async function createLoadTestExecution(
 
 /**
  * GET /loadtestsexecutions
- * Get all load test executions with their executions nested
+ * Get all load test executions with their test results nested
  */
 async function getLoadTestExecutions(
   request: FastifyRequest<{ Querystring: GetLoadTestExecutionsParams }>,
@@ -75,23 +75,58 @@ async function getLoadTestExecutions(
     where.executionPlanId = executionPlanId;
   }
 
-  // Fetch load test executions
+  // Fetch load test executions with their test results
   const loadTestExecutions = await prisma.loadTestExecution.findMany({
     where,
     orderBy: {
       createdAt: 'desc',
     },
+    include: {
+      testResults: {
+        orderBy: {
+          timestamp: 'desc',
+        },
+      },
+    },
   });
 
-  // Transform to include executions (empty for now)
-  const transformed = loadTestExecutions.map((execution: any) => ({
-    id: execution.id,
-    name: execution.name,
-    loadTestPlanId: execution.executionPlanId,
-    createdAt: execution.createdAt,
-    updatedAt: execution.updatedAt,
-    loadtests: [], // TODO: fetch actual loadtests when implemented
-  }));
+  // Transform to include test results as loadtests
+  const transformed = loadTestExecutions.map((execution: any) => {
+    // Map TestResult records to the loadtests format
+    const loadtests = execution.testResults.map((result: any) => ({
+      id: result.id,
+      loadTestExecutionId: result.loadTestExecutionId,
+      status: 'completed',
+      command: `Test ${result.testId}`,
+      startedAt: result.timestamp.toISOString(),
+      completedAt: result.timestamp.toISOString(),
+      avgLatency: result.avgLatency,
+      p95Latency: result.p95Latency,
+      successRate: result.successRate,
+      resultTimestamp: result.timestamp.toISOString(),
+      minLatency: result.minLatency,
+      maxLatency: result.maxLatency,
+      p50Latency: result.p50Latency,
+      p99Latency: result.p99Latency,
+      totalRequests: result.totalRequests,
+      testDuration: result.testDuration,
+      actualRate: result.actualRate,
+      throughput: result.throughput,
+      bytesIn: result.bytesIn,
+      bytesOut: result.bytesOut,
+      statusCodes: result.statusCodes ? JSON.parse(result.statusCodes) : null,
+      errorDetails: result.errorDetails ? JSON.parse(result.errorDetails) : null,
+    }));
+
+    return {
+      id: execution.id,
+      name: execution.name,
+      loadTestPlanId: execution.executionPlanId,
+      createdAt: execution.createdAt,
+      updatedAt: execution.updatedAt,
+      loadtests,
+    };
+  });
 
   reply.send({
     loadtestsexecutions: transformed,
@@ -100,7 +135,7 @@ async function getLoadTestExecutions(
 
 /**
  * GET /loadtestsexecutions/:id
- * Get a specific load test execution
+ * Get a specific load test execution with its test results
  */
 async function getLoadTestExecution(
   request: FastifyRequest<{ Params: { id: string } }>,
@@ -121,6 +156,11 @@ async function getLoadTestExecution(
     },
     include: {
       executionPlan: true,
+      testResults: {
+        orderBy: {
+          timestamp: 'desc',
+        },
+      },
     },
   });
 
@@ -128,11 +168,38 @@ async function getLoadTestExecution(
     return reply.status(404).send({ message: 'Load test execution not found' });
   }
 
-  // Parse JSON fields
+  // Map TestResult records to the loadtests format
+  const loadtests = loadTestExecution.testResults.map((result: any) => ({
+    id: result.id,
+    loadTestExecutionId: result.loadTestExecutionId,
+    status: 'completed',
+    command: `Test ${result.testId}`,
+    startedAt: result.timestamp.toISOString(),
+    completedAt: result.timestamp.toISOString(),
+    avgLatency: result.avgLatency,
+    p95Latency: result.p95Latency,
+    successRate: result.successRate,
+    resultTimestamp: result.timestamp.toISOString(),
+    minLatency: result.minLatency,
+    maxLatency: result.maxLatency,
+    p50Latency: result.p50Latency,
+    p99Latency: result.p99Latency,
+    totalRequests: result.totalRequests,
+    testDuration: result.testDuration,
+    actualRate: result.actualRate,
+    throughput: result.throughput,
+    bytesIn: result.bytesIn,
+    bytesOut: result.bytesOut,
+    statusCodes: result.statusCodes ? JSON.parse(result.statusCodes) : null,
+    errorDetails: result.errorDetails ? JSON.parse(result.errorDetails) : null,
+  }));
+
+  // Parse JSON fields from the execution itself
   const parsedExecution = {
     ...loadTestExecution,
     statusCodes: loadTestExecution.statusCodes ? JSON.parse(loadTestExecution.statusCodes) : null,
     errorDetails: loadTestExecution.errorDetails ? JSON.parse(loadTestExecution.errorDetails) : null,
+    loadtests,
   };
 
   reply.send(parsedExecution);
@@ -381,10 +448,12 @@ export async function loadTestExecutionsRoutes(fastify: FastifyInstance) {
     handler: getLoadTestExecution,
   });
 
-  fastify.get('/loadtestsexecutions/:id/results', {
-    preHandler: verifyToken,
-    handler: getLoadTestExecutionResults,
-  });
+  // Removed: GET /loadtestsexecutions/:id/results
+  // Results are now included in the /loadtestsexecutions/:id response via loadtests array
+  // fastify.get('/loadtestsexecutions/:id/results', {
+  //   preHandler: verifyToken,
+  //   handler: getLoadTestExecutionResults,
+  // });
 
   fastify.put('/loadtestsexecutions/:id', {
     preHandler: verifyToken,
