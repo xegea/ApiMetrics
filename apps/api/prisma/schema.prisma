@@ -58,6 +58,12 @@ model LoadTestExecution {
   bytesOut        Int?     // Total bytes sent
   statusCodes     String?  // JSON string of status code counts
   errorDetails    String?  // JSON string of error details
+  // Immutable snapshot of execution plan data at creation time
+  planName        String?  // Snapshot of execution plan name
+  planExecutionTime String? // Snapshot of execution time
+  planIterations  Int?     // Snapshot of iterations
+  planDelayBetweenRequests String? // Snapshot of delay between requests
+  planTestRequests String? // JSON string of test requests snapshot
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

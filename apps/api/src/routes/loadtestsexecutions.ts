@@ -56,9 +56,34 @@ async function createLoadTestExecution(
     status: 'running',
   };
 
-  // Only include executionPlanId if it's provided
+  // If executionPlanId is provided, fetch the plan data and create a snapshot
   if (executionPlanId) {
+    // Fetch the execution plan with test requests to create immutable snapshot
+    const executionPlan = await (prisma as any).executionPlan.findFirst({
+      where: {
+        id: executionPlanId,
+        tenantId: ensured.tenantId,
+      },
+      include: {
+        testRequests: {
+          orderBy: {
+            orderId: 'asc',
+          },
+        },
+      },
+    });
+
+    if (!executionPlan) {
+      return reply.status(404).send({ message: 'Execution plan not found' });
+    }
+
+    // Always store executionPlanId and immutable snapshot of the plan data
     createData.executionPlanId = executionPlanId;
+    createData.planName = executionPlan.name;
+    createData.planExecutionTime = executionPlan.executionTime;
+    createData.planIterations = executionPlan.iterations;
+    createData.planDelayBetweenRequests = executionPlan.delayBetweenRequests;
+    createData.planTestRequests = JSON.stringify(executionPlan.testRequests);
   }
 
   const loadTestExecution = await prisma.loadTestExecution.create({
@@ -138,6 +163,12 @@ async function getLoadTestExecutions(
       loadTestPlanId: execution.executionPlanId,
       createdAt: execution.createdAt,
       updatedAt: execution.updatedAt,
+      // Include snapshot fields
+      planName: execution.planName,
+      planExecutionTime: execution.planExecutionTime,
+      planIterations: execution.planIterations,
+      planDelayBetweenRequests: execution.planDelayBetweenRequests,
+      planTestRequests: execution.planTestRequests,
       loadtests,
     };
   });
@@ -440,17 +471,6 @@ async function downloadLoadTestExecution(
       id,
       tenantId: ensured.tenantId,
     },
-    include: {
-      executionPlan: {
-        include: {
-          testRequests: {
-            orderBy: {
-              orderId: 'asc',
-            },
-          },
-        },
-      },
-    },
   });
 
   if (!loadTestExecution) {
@@ -461,11 +481,14 @@ async function downloadLoadTestExecution(
   const authHeader = request.headers.authorization || '';
   const jwtToken = authHeader.replace('Bearer ', '');
 
+  // Parse the stored test requests snapshot
+  const testRequests = loadTestExecution.planTestRequests ? JSON.parse(loadTestExecution.planTestRequests) : [];
+
   // Create a transparent, readable JSON execution plan
   const executionPlan: any = {
     metadata: {
       name: loadTestExecution.name,
-      planName: loadTestExecution.executionPlan?.name || 'Load Test Plan',
+      planName: loadTestExecution.planName || 'Load Test Plan',
       createdAt: loadTestExecution.createdAt.toISOString(),
       description: 'Execution plan for ApiMetrics load testing',
       executionId: loadTestExecution.id, // Include the LoadTestExecution ID
@@ -476,35 +499,40 @@ async function downloadLoadTestExecution(
       note: 'This token is your personal access token. Do not share this file.',
     },
     tests: [{
-      id: loadTestExecution.executionPlan?.id || 'default-test', // Use the execution plan ID if available
+      id: loadTestExecution.executionPlanId || 'default-test', // Use the execution plan ID if available
       name: loadTestExecution.name,
-      requests: loadTestExecution.executionPlan?.testRequests?.map((testRequest: any) => ({
+      requests: testRequests.map((testRequest: any) => ({
         method: testRequest.httpMethod,
         target: testRequest.endpoint,
         description: `${testRequest.httpMethod} request to ${testRequest.endpoint}`,
-      })) || [],
+      })),
       rps: 10,
-      duration: loadTestExecution.executionPlan?.executionTime || '1m',
-      iterations: loadTestExecution.executionPlan?.iterations || 1,
-      delayBetweenRequests: loadTestExecution.executionPlan?.delayBetweenRequests || '100ms',
+      duration: loadTestExecution.planExecutionTime || '1m',
+      iterations: loadTestExecution.planIterations || 1,
+      delayBetweenRequests: loadTestExecution.planDelayBetweenRequests || '100ms',
     }],
   };
 
   // Set headers for download
-  // Create a unique filename using timestamp and random suffix for each download
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', '');
-  const randomSuffix = Math.random().toString(36).substring(2, 8); // 6-character random string
-  const sanitizedPlanName = (loadTestExecution.executionPlan?.name || loadTestExecution.name)
+  // Create a clean, readable filename
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const seconds = now.getSeconds().toString().padStart(2, '0');
+  const milliseconds = now.getMilliseconds().toString().padStart(3, '0');
+  const timeStr = `${hours}${minutes}${seconds}_${milliseconds}`; // HHMMSS_MMM
+  const sanitizedPlanName = (loadTestExecution.planName || loadTestExecution.name)
     .replace(/\s+/g, '-') // Replace spaces with hyphens
     .replace(/[^a-zA-Z0-9\-_]/g, '') // Remove special characters
     .toLowerCase(); // Convert to lowercase
-  const fileName = `execution-plan-${sanitizedPlanName}-${timestamp}-${randomSuffix}.json`;
+  const fileName = `${sanitizedPlanName}-${dateStr}_${timeStr}.json`;
 
   console.log('DEBUG: Generated filename:', fileName);
-  console.log('DEBUG: Plan name:', loadTestExecution.executionPlan.name);
+  console.log('DEBUG: Plan name:', loadTestExecution.planName);
   console.log('DEBUG: Sanitized plan name:', sanitizedPlanName);
-  console.log('DEBUG: Timestamp:', timestamp);
-  console.log('DEBUG: Random suffix:', randomSuffix);
+  console.log('DEBUG: Date:', dateStr);
+  console.log('DEBUG: Time:', timeStr);
 
   // Determine if this is a local development environment
   const isLocal = request.hostname === 'localhost' || request.hostname === '127.0.0.1' || request.hostname?.startsWith('localhost:');

@@ -38,6 +38,12 @@ interface LoadTestExecution {
   loadTestPlanId: string;
   createdAt: string;
   updatedAt: string;
+  // Snapshot fields for immutable execution plan data
+  planName?: string;
+  planExecutionTime?: string;
+  planIterations?: number;
+  planDelayBetweenRequests?: string;
+  planTestRequests?: string;
 }
 
 interface LoadTestExecutionWithExecutions extends LoadTestExecution {
@@ -52,6 +58,7 @@ import FileCopyIcon from '@mui/icons-material/FileCopy';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 interface CommandModalState {
   isOpen: boolean;
@@ -63,10 +70,11 @@ interface CommandModalState {
 interface LoadTestResultCardProps {
   loadtest: Execution;
   index: number;
+  isExpanded: boolean;
+  onToggle: () => void;
 }
 
-function LoadTestResultCard({ loadtest, index }: LoadTestResultCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+function LoadTestResultCard({ loadtest, index, isExpanded, onToggle }: LoadTestResultCardProps) {
 
   const formatLatency = (nanoseconds?: number) => {
     if (!nanoseconds) return 'N/A';
@@ -106,7 +114,7 @@ function LoadTestResultCard({ loadtest, index }: LoadTestResultCardProps) {
     <div className={`border rounded-lg ${getStatusColor(loadtest.status)}`}>
       {/* Header */}
       <div
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={onToggle}
         className="flex items-center justify-between p-4 cursor-pointer hover:bg-opacity-75 transition-all"
       >
         <div className="flex items-center gap-4 flex-1">
@@ -237,21 +245,26 @@ function LoadTestResultCard({ loadtest, index }: LoadTestResultCardProps) {
             <div>
               <h3 className="font-semibold text-gray-800 mb-3">Status Codes</h3>
               <div className="space-y-2">
-                {Object.entries(loadtest.statusCodes).map(([code, count]) => (
-                  <div key={code} className="flex items-center justify-between bg-white p-3 rounded border border-gray-200">
-                    <div className="flex items-center gap-3">
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                        parseInt(code) >= 200 && parseInt(code) < 300 ? 'bg-green-100 text-green-800' :
-                        parseInt(code) >= 400 && parseInt(code) < 500 ? 'bg-yellow-100 text-yellow-800' :
-                        parseInt(code) >= 500 ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {code}
-                      </span>
-                      <span className="text-gray-600">HTTP {code}</span>
-                      <span className="font-semibold text-blue-600">({Number(count)} requests)</span>
+                {Object.entries(loadtest.statusCodes).map(([code, count]) => {
+                  const statusColor = parseInt(code) >= 200 && parseInt(code) < 300 ? 'text-green-600' :
+                                    parseInt(code) >= 400 && parseInt(code) < 500 ? 'text-yellow-600' :
+                                    parseInt(code) >= 500 ? 'text-red-600' : 'text-gray-600';
+                  return (
+                    <div key={code} className="flex items-center justify-between bg-white p-3 rounded border border-gray-200">
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          parseInt(code) >= 200 && parseInt(code) < 300 ? 'bg-green-100 text-green-800' :
+                          parseInt(code) >= 400 && parseInt(code) < 500 ? 'bg-yellow-100 text-yellow-800' :
+                          parseInt(code) >= 500 ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {code}
+                        </span>
+                        <span className="text-gray-600">HTTP {code}</span>
+                        <span className={`font-semibold ${statusColor}`}>({Number(count)} requests)</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -281,7 +294,8 @@ function LoadTestsExecutionsPage() {
   const [loading, setLoading] = useState(false);
   const [loadTestExecutions, setLoadTestExecutions] = useState<LoadTestExecutionWithExecutions[]>([]);
   const [expandedPlans, setExpandedPlans] = useState<string[]>([]);
-  const [expandedExecutions, setExpandedExecutions] = useState<string[]>([]);
+  const [expandedExecution, setExpandedExecution] = useState<string | null>(null);
+  const [expandedLoadTest, setExpandedLoadTest] = useState<string | null>(null);
   const [commandModal, setCommandModal] = useState<CommandModalState>({
     isOpen: false,
     command: '',
@@ -336,14 +350,12 @@ function LoadTestsExecutionsPage() {
   };
 
   const toggleExecution = async (executionId: string) => {
-    const isExpanding = !expandedExecutions.includes(executionId);
-    
-    setExpandedExecutions(prev =>
-      prev.includes(executionId)
-        ? prev.filter(id => id !== executionId)
-        : [...prev, executionId]
-    );
-
+    const isCollapsing = expandedExecution === executionId;
+    setExpandedExecution(prev => prev === executionId ? null : executionId);
+    // Reset expanded load test when collapsing execution
+    if (isCollapsing) {
+      setExpandedLoadTest(null);
+    }
     // Results are already included in the execution data via loadtests array
     // No need to fetch separately
   };
@@ -390,6 +402,22 @@ function LoadTestsExecutionsPage() {
     }
   };
 
+  const handleRefreshExecution = async (executionId: string) => {
+    try {
+      // Refresh all executions without showing global loading state
+      const response = await getLoadTestExecutions();
+      const executions = response.loadtestsexecutions;
+      
+      // Sort by createdAt descending (most recent first)
+      executions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      setLoadTestExecutions(executions as LoadTestExecutionWithExecutions[]);
+    } catch (error) {
+      console.error('Failed to refresh execution:', error);
+      alert('Failed to refresh execution. Please try again.');
+    }
+  };
+
   const handleDownloadAndRun = async (execution: LoadTestExecutionWithExecutions) => {
     try {
       // Download the execution plan and get the filename + instructions
@@ -425,7 +453,7 @@ function LoadTestsExecutionsPage() {
                 {/* Execution Plan Header */}
                 <div className="flex justify-between items-center p-4 bg-blue-50 border-b">
                   <div onClick={() => toggleExecution(execution.id)} className="flex items-center gap-4 cursor-pointer flex-1">
-                    {expandedExecutions.includes(execution.id) ? (
+                    {expandedExecution === execution.id ? (
                       <ExpandMoreIcon className="text-2xl text-blue-600" />
                     ) : (
                       <ChevronRightIcon className="text-2xl text-blue-600" />
@@ -436,6 +464,13 @@ function LoadTestsExecutionsPage() {
                       <div className="text-sm text-gray-500">
                         {execution.createdAt && `Created: ${new Date(execution.createdAt).toLocaleString()}`}
                       </div>
+                      {execution.planName && (
+                        <div className="text-sm text-gray-600 mt-1">
+                          <span className="font-medium">Plan:</span> {execution.planName}
+                          {execution.planExecutionTime && <span> • Duration: {execution.planExecutionTime}</span>}
+                          {execution.planIterations && <span> • Iterations: {execution.planIterations}</span>}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -443,24 +478,198 @@ function LoadTestsExecutionsPage() {
                       <PlayCircleIcon fontSize="small" />
                       Download & Run
                     </button>
+                    <button onClick={(e) => { e.stopPropagation(); handleRefreshExecution(execution.id); }} className="p-1 rounded text-gray-600 hover:text-blue-600 hover:bg-blue-50" title="Refresh">
+                      <RefreshIcon fontSize="small" />
+                    </button>
                     <button onClick={(e) => { e.stopPropagation(); handleDeleteExecution(execution.id); }} className="p-1 rounded text-gray-600 hover:text-red-600 hover:bg-red-50" title="Delete">
                       <DeleteIcon fontSize="small" />
                     </button>
                   </div>
                 </div>
 
-                {expandedExecutions.includes(execution.id) && (
+                {expandedExecution === execution.id && (
                   <div className="p-4">
+                    {/* Metrics Graph Section */}
+                    {execution.loadtests && execution.loadtests.length > 0 && (() => {
+                      // Sort loadtests by time (oldest first) for the graph
+                      const sortedLoadtests = [...execution.loadtests].sort((a, b) => 
+                        new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
+                      );
+                      
+                      const totalRequests = execution.loadtests.reduce((sum, t) => sum + (t.totalRequests || 0), 0);
+                      const totalErrors = execution.loadtests.reduce((sum, t) => {
+                        const errors = (t.totalRequests || 0) - Math.round((t.totalRequests || 0) * (t.successRate || 0));
+                        return sum + errors;
+                      }, 0);
+                      const totalSuccess = totalRequests - totalErrors;
+                      
+                      return (
+                      <div className="mb-6 bg-gradient-to-br from-slate-50 to-blue-50 border border-slate-200 rounded-xl p-6 shadow-lg">
+                        <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                          Test Metrics Timeline
+                        </h3>
+                        
+                        {/* Timeline Graph */}
+                        <div className="bg-white rounded-xl p-6 shadow-md border border-slate-200">
+                          <div className="relative" style={{ height: '200px' }}>
+                            {/* Calculate max values */}
+                            {(() => {
+                              const maxRequests = Math.max(...sortedLoadtests.map(t => t.totalRequests || 0));
+                              const maxValue = maxRequests;
+                              const ySteps = 5;
+                              const stepValue = maxValue / ySteps;
+                              
+                              return (
+                                <>
+                                  {/* Y-axis labels and grid lines */}
+                                  <div className="absolute left-0 top-0 bottom-12 w-20 flex flex-col justify-between">
+                                    {Array.from({ length: ySteps + 1 }).map((_, i) => (
+                                      <div key={i} className="relative">
+                                        <span className="absolute right-3 text-sm font-medium text-gray-600 transform -translate-y-1/2">
+                                          {Math.round(stepValue * (ySteps - i))}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {/* Grid lines horizontal */}
+                                  <div className="absolute left-20 right-0 top-0 bottom-12">
+                                    <div className="relative h-full">
+                                      {Array.from({ length: ySteps + 1 }).map((_, i) => (
+                                        <div 
+                                          key={i} 
+                                          className="absolute left-0 right-0 border-t border-slate-200"
+                                          style={{ top: `${(i / ySteps) * 100}%` }}
+                                        ></div>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* Graph area - Bars */}
+                                  <div className="absolute left-20 right-0 top-0 bottom-12 flex items-end justify-around gap-3 px-6" style={{ height: 'calc(100% - 48px)' }}>
+                                    {sortedLoadtests.map((loadtest, index) => {
+                                      const errorCount = (loadtest.totalRequests || 0) - Math.round((loadtest.totalRequests || 0) * (loadtest.successRate || 0));
+                                      const successCount = (loadtest.totalRequests || 0) - errorCount;
+                                      
+                                      // Calculate heights as percentage of max value
+                                      const successHeightPercent = maxValue > 0 ? (successCount / maxValue) * 100 : 0;
+                                      const errorHeightPercent = maxValue > 0 ? (errorCount / maxValue) * 100 : 0;
+                                      
+                                      return (
+                                        <div 
+                                          key={loadtest.id} 
+                                          className="flex-1 flex flex-col justify-end items-center group relative"
+                                          style={{ height: '100%' }}
+                                        >
+                                          {/* Single Tooltip for the whole bar */}
+                                          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full mb-2 bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30 shadow-xl">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              <div className="w-2 h-2 bg-blue-500 rounded"></div>
+                                              <span className="text-xs text-gray-300">Total:</span>
+                                              <span className="font-bold">{loadtest.totalRequests || 0}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                              <div className="w-2 h-2 bg-green-500 rounded"></div>
+                                              <span className="text-xs text-gray-300">OK:</span>
+                                              <span className="font-bold text-green-400">{successCount}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <div className="w-2 h-2 bg-red-500 rounded"></div>
+                                              <span className="text-xs text-gray-300">Errors:</span>
+                                              <span className="font-bold text-red-400">{errorCount}</span>
+                                            </div>
+                                          </div>
+
+                                          {/* Bar with absolute positioning for stacking */}
+                                          <div className="relative w-full max-w-[70px]" style={{ height: '100%' }}>
+                                            {/* Success bar at bottom */}
+                                            <div 
+                                              className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-green-500 to-green-400 hover:from-green-600 hover:to-green-500 transition-all duration-200 cursor-pointer flex items-center justify-center rounded-t-lg border-2 border-white shadow-lg"
+                                              style={{ height: `${successHeightPercent}%` }}
+                                            >
+                                            </div>
+                                            {/* Error bar stacked on top */}
+                                            {errorCount > 0 && (
+                                              <div 
+                                                className="absolute left-0 right-0 bg-gradient-to-t from-red-500 to-red-400 hover:from-red-600 hover:to-red-500 transition-all duration-200 cursor-pointer flex items-center justify-center border-x-2 border-t-2 border-white rounded-t-lg shadow-lg"
+                                                style={{ 
+                                                  bottom: `${successHeightPercent}%`,
+                                                  height: `${errorHeightPercent}%`
+                                                }}
+                                              >
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+
+                                  {/* X-axis labels (Test numbers) */}
+                                  <div className="absolute left-20 right-0 bottom-0 flex justify-around items-start h-12 px-6">
+                                    {sortedLoadtests.map((loadtest, index) => (
+                                      <div key={loadtest.id} className="flex-1 flex flex-col items-center max-w-[70px]">
+                                        <div className="text-sm font-bold text-gray-800 bg-white px-2 py-1 rounded-md shadow-sm">#{index + 1}</div>
+                                        <div className="text-xs text-gray-500 mt-1">{new Date(loadtest.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+
+                        {/* Legend with totals */}
+                        <div className="inline-flex items-center gap-4 mt-4 text-sm bg-gray-100 rounded-lg px-4 py-2 shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-gradient-to-br from-blue-400 to-blue-600 rounded"></div>
+                            <span className="text-gray-700 font-medium">Total: <span className="font-bold text-blue-600">{totalRequests}</span></span>
+                          </div>
+                          <div className="w-px h-4 bg-gray-300"></div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-gradient-to-br from-green-400 to-green-600 rounded"></div>
+                            <span className="text-gray-700 font-medium">OK: <span className="font-bold text-green-600">{totalSuccess}</span></span>
+                          </div>
+                          <div className="w-px h-4 bg-gray-300"></div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-gradient-to-br from-red-400 to-red-600 rounded"></div>
+                            <span className="text-gray-700 font-medium">Errors: <span className="font-bold text-red-600">{totalErrors}</span></span>
+                          </div>
+                        </div>
+                      </div>
+                      );
+                    })()}
+
                     {/* Loadtests list */}
                     {execution.loadtests && execution.loadtests.length > 0 ? (
                       <div className="space-y-3">
-                        {execution.loadtests.map((loadtest, index) => (
-                          <LoadTestResultCard key={loadtest.id} loadtest={loadtest} index={index + 1} />
-                        ))}
+                        {[...execution.loadtests]
+                          .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+                          .map((loadtest, index) => (
+                            <LoadTestResultCard 
+                              key={loadtest.id} 
+                              loadtest={loadtest} 
+                              index={execution.loadtests.length - index}
+                              isExpanded={expandedLoadTest === loadtest.id}
+                              onToggle={() => setExpandedLoadTest(prev => prev === loadtest.id ? null : loadtest.id)}
+                            />
+                          ))}
                       </div>
                     ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        No load tests found for this load test execution.
+                      <div className="text-center py-8">
+                        <div className="text-gray-500 mb-4">
+                          No load tests found for this load test execution.
+                        </div>
+                        <div className="text-gray-600 mb-6 flex justify-center">
+                          <button onClick={() => handleDownloadAndRun(execution)} className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-2" title="Download & Run">
+                            <PlayCircleIcon />
+                            Download & Run
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
