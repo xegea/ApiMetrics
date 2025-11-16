@@ -513,6 +513,24 @@ function LoadTestsExecutionsPage() {
                           Test Metrics Timeline
                         </h3>
                         
+                        {/* Legend with totals */}
+                        <div className="inline-flex items-center gap-4 mb-4 text-sm bg-gray-100 rounded-lg px-4 py-2 shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-gradient-to-br from-blue-400 to-blue-600 rounded"></div>
+                            <span className="text-gray-700 font-medium">Total: <span className="font-bold text-blue-600">{totalRequests}</span></span>
+                          </div>
+                          <div className="w-px h-4 bg-gray-300"></div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-gradient-to-br from-green-400 to-green-600 rounded"></div>
+                            <span className="text-gray-700 font-medium">OK: <span className="font-bold text-green-600">{totalSuccess}</span></span>
+                          </div>
+                          <div className="w-px h-4 bg-gray-300"></div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-gradient-to-br from-red-400 to-red-600 rounded"></div>
+                            <span className="text-gray-700 font-medium">Errors: <span className="font-bold text-red-600">{totalErrors}</span></span>
+                          </div>
+                        </div>
+                        
                         {/* Timeline Graph */}
                         <div className="bg-white rounded-xl p-6 shadow-md border border-slate-200">
                           <div className="relative" style={{ height: '200px' }}>
@@ -621,24 +639,6 @@ function LoadTestsExecutionsPage() {
                                 </>
                               );
                             })()}
-                          </div>
-                        </div>
-
-                        {/* Legend with totals */}
-                        <div className="inline-flex items-center gap-4 mt-4 text-sm bg-gray-100 rounded-lg px-4 py-2 shadow-sm">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-gradient-to-br from-blue-400 to-blue-600 rounded"></div>
-                            <span className="text-gray-700 font-medium">Total: <span className="font-bold text-blue-600">{totalRequests}</span></span>
-                          </div>
-                          <div className="w-px h-4 bg-gray-300"></div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-gradient-to-br from-green-400 to-green-600 rounded"></div>
-                            <span className="text-gray-700 font-medium">OK: <span className="font-bold text-green-600">{totalSuccess}</span></span>
-                          </div>
-                          <div className="w-px h-4 bg-gray-300"></div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-gradient-to-br from-red-400 to-red-600 rounded"></div>
-                            <span className="text-gray-700 font-medium">Errors: <span className="font-bold text-red-600">{totalErrors}</span></span>
                           </div>
                         </div>
                       </div>
