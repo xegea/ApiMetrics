@@ -14,7 +14,7 @@ interface GetLoadTestExecutionsParams {
 }
 
 /**
- * POST /loadtestexecutions
+ * POST /loadtestsexecutions
  * Create a new load test execution
  */
 async function createLoadTestExecution(
@@ -55,8 +55,8 @@ async function createLoadTestExecution(
 }
 
 /**
- * GET /loadtestexecutions
- * Get all load test executions for the tenant
+ * GET /loadtestsexecutions
+ * Get all load test executions with their executions nested
  */
 async function getLoadTestExecutions(
   request: FastifyRequest<{ Querystring: GetLoadTestExecutionsParams }>,
@@ -75,55 +75,57 @@ async function getLoadTestExecutions(
     where.executionPlanId = executionPlanId;
   }
 
+  // Fetch load test executions with their test results
   const loadTestExecutions = await (prisma as any).loadTestExecution.findMany({
     where,
-    select: {
-      id: true,
-      tenantId: true,
-      userId: true,
-      executionPlanId: true,
-      name: true,
-      status: true,
-      avgLatency: true,
-      p95Latency: true,
-      successRate: true,
-      resultTimestamp: true,
-      // Comprehensive metrics from Vegeta
-      minLatency: true,
-      maxLatency: true,
-      p50Latency: true,
-      p99Latency: true,
-      totalRequests: true,
-      testDuration: true,
-      actualRate: true,
-      throughput: true,
-      bytesIn: true,
-      bytesOut: true,
-      statusCodes: true,
-      errorDetails: true,
-      createdAt: true,
-      updatedAt: true,
-      executionPlan: true,
-    },
     orderBy: {
       createdAt: 'desc',
     },
+    include: {
+      testResults: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+      },
+    },
   });
 
-  // Parse JSON fields for each execution
-  const parsedExecutions = loadTestExecutions.map((execution: any) => ({
-    ...execution,
-    statusCodes: execution.statusCodes ? JSON.parse(execution.statusCodes) : null,
-    errorDetails: execution.errorDetails ? JSON.parse(execution.errorDetails) : null,
+  // Transform to include executions
+  const transformed = loadTestExecutions.map((execution: any) => ({
+    id: execution.id,
+    name: execution.name,
+    loadTestPlanId: execution.executionPlanId,
+    createdAt: execution.createdAt,
+    updatedAt: execution.updatedAt,
+    loadtests: execution.testResults.map((result: any) => ({
+      id: result.id,
+      executionId: result.loadTestExecutionId,
+      avgLatency: result.avgLatency,
+      p95Latency: result.p95Latency,
+      successRate: result.successRate,
+      timestamp: result.timestamp,
+      minLatency: result.minLatency,
+      maxLatency: result.maxLatency,
+      p50Latency: result.p50Latency,
+      p99Latency: result.p99Latency,
+      requests: result.totalRequests,
+      duration: result.testDuration,
+      rate: result.actualRate,
+      throughput: result.throughput,
+      bytesIn: result.bytesIn,
+      bytesOut: result.bytesOut,
+      statusCodes: result.statusCodes ? JSON.parse(result.statusCodes) : null,
+      errors: result.errorDetails ? JSON.parse(result.errorDetails) : null,
+    })),
   }));
 
   reply.send({
-    loadTestExecutions: parsedExecutions,
+    loadtestsexecutions: transformed,
   });
 }
 
 /**
- * GET /loadtestexecutions/:id
+ * GET /loadtestsexecutions/:id
  * Get a specific load test execution
  */
 async function getLoadTestExecution(
@@ -163,7 +165,7 @@ async function getLoadTestExecution(
 }
 
 /**
- * GET /loadtestexecutions/:id/results
+ * GET /loadtestsexecutions/:id/results
  * Get test results for a specific load test execution
  */
 async function getLoadTestExecutionResults(
@@ -179,7 +181,7 @@ async function getLoadTestExecutionResults(
   const { id } = request.params;
 
   // Verify the execution exists and belongs to the tenant
-  const loadTestExecution = await (prisma as any).loadTestExecution.findFirst({
+  const loadTestExecution = await (prisma.loadTestExecution as any).findFirst({
     where: {
       id,
       tenantId: ensured.tenantId,
@@ -190,36 +192,34 @@ async function getLoadTestExecutionResults(
     return reply.status(404).send({ message: 'Load test execution not found' });
   }
 
-  // Return the execution with its results as a single object
+  // Return the detailed metrics from the execution itself
+  const result = {
+    id: loadTestExecution.id,
+    avgLatency: loadTestExecution.avgLatency,
+    p95Latency: loadTestExecution.p95Latency,
+    successRate: loadTestExecution.successRate,
+    resultTimestamp: loadTestExecution.resultTimestamp,
+    minLatency: loadTestExecution.minLatency,
+    maxLatency: loadTestExecution.maxLatency,
+    p50Latency: loadTestExecution.p50Latency,
+    p99Latency: loadTestExecution.p99Latency,
+    totalRequests: loadTestExecution.totalRequests,
+    testDuration: loadTestExecution.testDuration,
+    actualRate: loadTestExecution.actualRate,
+    throughput: loadTestExecution.throughput,
+    bytesIn: loadTestExecution.bytesIn,
+    bytesOut: loadTestExecution.bytesOut,
+    statusCodes: loadTestExecution.statusCodes ? JSON.parse(loadTestExecution.statusCodes as string) : null,
+    errorDetails: loadTestExecution.errorDetails ? JSON.parse(loadTestExecution.errorDetails as string) : null,
+  };
+
   reply.send({
-    testResults: [
-      {
-        id: loadTestExecution.id,
-        testId: loadTestExecution.executionPlanId,
-        avgLatency: loadTestExecution.avgLatency,
-        p95Latency: loadTestExecution.p95Latency,
-        successRate: loadTestExecution.successRate,
-        timestamp: loadTestExecution.resultTimestamp?.toISOString() || loadTestExecution.updatedAt.toISOString(),
-        // Comprehensive metrics from Vegeta
-        minLatency: loadTestExecution.minLatency,
-        maxLatency: loadTestExecution.maxLatency,
-        p50Latency: loadTestExecution.p50Latency,
-        p99Latency: loadTestExecution.p99Latency,
-        totalRequests: loadTestExecution.totalRequests,
-        testDuration: loadTestExecution.testDuration,
-        actualRate: loadTestExecution.actualRate,
-        throughput: loadTestExecution.throughput,
-        bytesIn: loadTestExecution.bytesIn,
-        bytesOut: loadTestExecution.bytesOut,
-        statusCodes: loadTestExecution.statusCodes ? JSON.parse(loadTestExecution.statusCodes) : null,
-        errorDetails: loadTestExecution.errorDetails ? JSON.parse(loadTestExecution.errorDetails) : null,
-      },
-    ],
+    result,
   });
 }
 
 /**
- * PUT /loadtestexecutions/:id
+ * PUT /loadtestsexecutions/:id
  * Update a load test execution (e.g., status)
  */
 async function updateLoadTestExecution(
@@ -233,12 +233,11 @@ async function updateLoadTestExecution(
   });
 
   const { id } = request.params;
-  const updateData = request.body;
+  const updateData: any = request.body;
 
   // Remove fields that shouldn't be updated directly
   delete updateData.id;
   delete updateData.createdAt;
-  delete updateData.executionPlanId;
 
   const loadTestExecution = await (prisma as any).loadTestExecution.updateMany({
     where: {
@@ -261,7 +260,7 @@ async function updateLoadTestExecution(
 }
 
 /**
- * DELETE /loadtestexecutions/:id
+ * DELETE /loadtestsexecutions/:id
  * Delete a load test execution
  */
 async function deleteLoadTestExecution(
@@ -291,7 +290,7 @@ async function deleteLoadTestExecution(
 }
 
 /**
- * GET /loadtestexecutions/:id/download
+ * GET /loadtestsexecutions/:id/download
  * Download a JSON execution plan with embedded JWT token
  * User runs: npx @xegea/apimetrics-cli execute-plan <file.json>
  */
@@ -338,6 +337,7 @@ async function downloadLoadTestExecution(
     metadata: {
       name: loadTestExecution.name,
       planName: loadTestExecution.executionPlan.name,
+      executionId: loadTestExecution.id, // Include the execution ID for the CLI to use
       createdAt: loadTestExecution.createdAt.toISOString(),
       description: 'Execution plan for ApiMetrics load testing',
     },
@@ -347,7 +347,7 @@ async function downloadLoadTestExecution(
       note: 'This token is your personal access token. Do not share this file.',
     },
     tests: [{
-      id: loadTestExecution.id,
+      id: loadTestExecution.executionPlan.id, // Use the execution plan ID
       name: loadTestExecution.name,
       requests: loadTestExecution.executionPlan.testRequests.map((testRequest: any) => ({
         method: testRequest.httpMethod,
@@ -362,33 +362,28 @@ async function downloadLoadTestExecution(
   };
 
   // Set headers for download
-  // Create a shell-friendly filename by replacing spaces with hyphens
-  // Format timestamp as YYYYMMDD-HHMMSSMS for uniqueness (e.g., 20251112-095006123)
-  const date = new Date(); // Use current time for unique filename on each download
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  const ms = String(date.getMilliseconds()).padStart(3, '0');
-  const timestamp = `${year}${month}${day}-${hours}${minutes}${seconds}${ms}`;
-  
+  // Create a unique filename using timestamp and random suffix for each download
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', '');
+  const randomSuffix = Math.random().toString(36).substring(2, 8); // 6-character random string
   const sanitizedPlanName = loadTestExecution.executionPlan.name
     .replace(/\s+/g, '-') // Replace spaces with hyphens
     .replace(/[^a-zA-Z0-9\-_]/g, '') // Remove special characters
     .toLowerCase(); // Convert to lowercase
-  const fileName = `execution-plan-${sanitizedPlanName}-${timestamp}.json`;
+  const fileName = `execution-plan-${sanitizedPlanName}-${timestamp}-${randomSuffix}.json`;
 
   console.log('DEBUG: Generated filename:', fileName);
   console.log('DEBUG: Plan name:', loadTestExecution.executionPlan.name);
   console.log('DEBUG: Sanitized plan name:', sanitizedPlanName);
   console.log('DEBUG: Timestamp:', timestamp);
+  console.log('DEBUG: Random suffix:', randomSuffix);
 
-  // Add instructions with the actual filename
+  // Add instructions with the exact filename (no wildcards)
   executionPlan.instructions = {
     step1: 'Install Node.js from https://nodejs.org if you do not have it',
-    step2: `Open Terminal and run: npx @xegea/apimetrics-cli execute-plan ~/Downloads/${fileName}`,
+    step2: {
+      instruction: 'Open Terminal and run:',
+      command: `npx @xegea/apimetrics-cli execute-plan ~/Downloads/${fileName}`,
+    },
     step3: 'Results will be automatically uploaded to your ApiMetrics dashboard',
   };
 
@@ -399,44 +394,92 @@ async function downloadLoadTestExecution(
   reply.send(executionPlan);
 }
 
-export default async function loadTestExecutionsRoutes(app: FastifyInstance) {
-  app.post('/loadtestexecutions', {
+export async function loadTestExecutionsRoutes(fastify: FastifyInstance) {
+  console.log('Registering load test executions routes...');
+  console.log('Fastify instance:', typeof fastify);
+  console.log('deleteLoadTestExecution function:', typeof deleteLoadTestExecution);
+  fastify.post('/loadtestsexecutions', {
     preHandler: verifyToken,
     handler: createLoadTestExecution,
   });
 
-  app.get('/loadtestexecutions', {
+  fastify.get('/loadtestsexecutions', {
     preHandler: verifyToken,
     handler: getLoadTestExecutions,
   });
 
-  app.get('/loadtestexecutions/:id', {
+  fastify.get('/loadtestsexecutions/:id', {
     preHandler: verifyToken,
     handler: getLoadTestExecution,
   });
 
-  app.get('/loadtestexecutions/:id/results', {
+  fastify.get('/loadtestsexecutions/:id/results', {
     preHandler: verifyToken,
     handler: getLoadTestExecutionResults,
   });
 
-  app.put('/loadtestexecutions/:id', {
+  fastify.put('/loadtestsexecutions/:id', {
     preHandler: verifyToken,
     handler: updateLoadTestExecution,
   });
 
-  app.delete('/loadtestexecutions/:id', {
+  fastify.delete('/loadtestsexecutions/:id', {
     preHandler: verifyToken,
     handler: deleteLoadTestExecution,
   });
 
-  app.get('/loadtestexecutions/:id/download', {
+  fastify.get('/loadtestsexecutions/:id/download', {
     preHandler: verifyToken,
     handler: downloadLoadTestExecution,
   });
 
   // OPTIONS handler for download endpoint (for CORS preflight)
-  app.options('/loadtestexecutions/:id/download', async (request, reply) => {
+  fastify.options('/loadtestsexecutions/:id/download', async (request, reply) => {
+    reply.header('Access-Control-Allow-Origin', 'http://localhost:8080');
+    reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Authorization');
+    reply.header('Access-Control-Expose-Headers', 'Content-Disposition');
+    reply.send();
+  });
+}
+
+export async function loadTestExecutionsRoutes(fastify: FastifyInstance) {
+  console.log('Registering load test executions routes...');
+  console.log('Fastify instance:', typeof fastify);
+  console.log('deleteLoadTestExecution function:', typeof deleteLoadTestExecution);
+
+  try {
+    fastify.delete('/loadtestsexecutions/:id', {
+      preHandler: verifyToken,
+      handler: deleteLoadTestExecution,
+    });
+    console.log('DELETE route registered successfully');
+  } catch (error) {
+    console.error('Error registering DELETE route:', error);
+  }
+
+export async function loadTestExecutionsRoutes(fastify: FastifyInstance) {
+  console.log('Registering load test executions routes...');
+  console.log('Fastify instance:', typeof fastify);
+  console.log('deleteLoadTestExecution function:', typeof deleteLoadTestExecution);
+
+  try {
+    fastify.delete('/loadtestsexecutions/:id', {
+      preHandler: verifyToken,
+      handler: deleteLoadTestExecution,
+    });
+    console.log('DELETE route registered successfully');
+  } catch (error) {
+    console.error('Error registering DELETE route:', error);
+  }
+
+  fastify.get('/loadtestsexecutions/:id/download', {
+    preHandler: verifyToken,
+    handler: downloadLoadTestExecution,
+  });
+
+  // OPTIONS handler for download endpoint (for CORS preflight)
+  fastify.options('/loadtestsexecutions/:id/download', async (request, reply) => {
     reply.header('Access-Control-Allow-Origin', 'http://localhost:8080');
     reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
     reply.header('Access-Control-Allow-Headers', 'Authorization');

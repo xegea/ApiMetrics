@@ -40,12 +40,12 @@ model LoadTestExecution {
   executionPlanId String
   name            String   // e.g., "Plan Name - 2023-11-10 14:30:00"
   status          String   @default("running") // running, completed, failed
-  // Result fields - stored directly on the execution
+  // Summary metrics from latest test result
   avgLatency      Float?   // Average latency in nanoseconds
   p95Latency      Float?   // P95 latency in nanoseconds
   successRate     Float?   // Success rate as decimal (0-1)
   resultTimestamp DateTime? // Timestamp of when results were recorded
-  // Detailed metrics from Vegeta
+  // Detailed metrics from latest Vegeta run
   minLatency      Float?   // Minimum latency in nanoseconds
   maxLatency      Float?   // Maximum latency in nanoseconds
   p50Latency      Float?   // P50 latency in nanoseconds
@@ -64,11 +64,43 @@ model LoadTestExecution {
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   tenant        Tenant        @relation(fields: [tenantId], references: [id])
   executionPlan ExecutionPlan @relation(fields: [executionPlanId], references: [id])
+  testResults   TestResult[]  @relation("ExecutionToResults")
 
   @@index([tenantId])
   @@index([userId])
   @@index([executionPlanId])
   @@map("load_test_executions")
+}
+
+model TestResult {
+  id              String   @id @default(uuid())
+  loadTestExecutionId String
+  testId          String   // UUID of the test
+  // Result fields
+  avgLatency      Float?   // Average latency in nanoseconds
+  p95Latency      Float?   // P95 latency in nanoseconds
+  successRate     Float?   // Success rate as decimal (0-1)
+  timestamp       DateTime @default(now())
+  // Detailed metrics from Vegeta
+  minLatency      Float?   // Minimum latency in nanoseconds
+  maxLatency      Float?   // Maximum latency in nanoseconds
+  p50Latency      Float?   // P50 latency in nanoseconds
+  p99Latency      Float?   // P99 latency in nanoseconds
+  totalRequests   Int?     // Total number of requests made
+  testDuration    String?  // Duration of the test (e.g., "30.001s")
+  actualRate      Float?   // Actual RPS achieved
+  throughput      Float?   // Throughput in req/sec
+  bytesIn         Int?     // Total bytes received
+  bytesOut        Int?     // Total bytes sent
+  statusCodes     String?  // JSON string of status code counts
+  errorDetails    String?  // JSON string of error details
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  loadTestExecution LoadTestExecution @relation("ExecutionToResults", fields: [loadTestExecutionId], references: [id], onDelete: Cascade)
+
+  @@index([loadTestExecutionId])
+  @@map("test_results")
 }
 
 model User {

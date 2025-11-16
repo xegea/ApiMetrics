@@ -1,4 +1,4 @@
-import { TestResult, LoadTestExecution } from '@apimetrics/shared';
+import { TestResult, LoadTestExecution, ExecutionPlan } from '@apimetrics/shared';
 import { supabase } from './supabase';
 
 const API_URL = process.env.NEXT_PUBLIC_APIMETRICS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -117,7 +117,7 @@ export interface TestRequest {
   createdBy?: string;
 }
 
-export interface ExecutionPlan {
+export interface ExecutionPlanWithRequests {
   id: string;
   name: string;
   createdAt: string;
@@ -137,22 +137,22 @@ export interface CreateExecutionPlanRequest {
   rampUpPeriods?: string;
 }
 
-export interface GetExecutionPlansResponse {
+export interface GetLoadTestPlansResponse {
   tenantId: string;
-  executionPlans: ExecutionPlan[];
+  loadtestplans: ExecutionPlanWithRequests[];
 }
 
-export async function createExecutionPlan(data: CreateExecutionPlanRequest): Promise<ExecutionPlan> {
-  return fetchAPI<ExecutionPlan>('/executionplans', {
+export async function createExecutionPlan(data: CreateExecutionPlanRequest): Promise<ExecutionPlanWithRequests> {
+  return fetchAPI<ExecutionPlanWithRequests>('/loadtestsplans', {
     method: 'POST',
     body: JSON.stringify(data),
     requireAuth: true,
   });
 }
 
-export async function getExecutionPlans(tenantId?: string): Promise<GetExecutionPlansResponse> {
-  const path = tenantId ? `/executionplans?tenantId=${encodeURIComponent(tenantId)}` : '/executionplans';
-  return fetchAPI<GetExecutionPlansResponse>(path, { requireAuth: true });
+export async function getLoadTestPlans(tenantId?: string): Promise<GetLoadTestPlansResponse> {
+  const path = tenantId ? `/loadtestsplans?tenantId=${encodeURIComponent(tenantId)}` : '/loadtestsplans';
+  return fetchAPI<GetLoadTestPlansResponse>(path, { requireAuth: true });
 }
 
 export interface CreateTestRequestRequest {
@@ -164,7 +164,7 @@ export interface CreateTestRequestRequest {
 }
 
 export async function createTestRequest(data: CreateTestRequestRequest): Promise<TestRequest> {
-  return fetchAPI<TestRequest>('/executionplans/requests', {
+  return fetchAPI<TestRequest>('/loadtestsplans/requests', {
     method: 'POST',
     body: JSON.stringify(data),
     requireAuth: true,
@@ -172,7 +172,7 @@ export async function createTestRequest(data: CreateTestRequestRequest): Promise
 }
 
 export async function deleteExecutionPlan(id: string): Promise<void> {
-  return fetchAPI<void>(`/executionplans/${id}`, {
+  return fetchAPI<void>(`/loadtestsplans/${id}`, {
     method: 'DELETE',
     requireAuth: true,
   });
@@ -193,8 +193,8 @@ export interface UpdateTestRequestRequest {
   headers?: string;
 }
 
-export async function updateExecutionPlan(id: string, data: UpdateExecutionPlanRequest): Promise<ExecutionPlan> {
-  return fetchAPI<ExecutionPlan>(`/executionplans/${id}`, {
+export async function updateExecutionPlan(id: string, data: UpdateExecutionPlanRequest): Promise<ExecutionPlanWithRequests> {
+  return fetchAPI<ExecutionPlanWithRequests>(`/loadtestsplans/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
     requireAuth: true,
@@ -202,7 +202,7 @@ export async function updateExecutionPlan(id: string, data: UpdateExecutionPlanR
 }
 
 export async function updateTestRequest(planId: string, requestId: string, data: UpdateTestRequestRequest): Promise<TestRequest> {
-  return fetchAPI<TestRequest>(`/executionplans/${planId}/requests/${requestId}`, {
+  return fetchAPI<TestRequest>(`/loadtestsplans/${planId}/requests/${requestId}`, {
     method: 'PUT',
     body: JSON.stringify(data),
     requireAuth: true,
@@ -210,7 +210,7 @@ export async function updateTestRequest(planId: string, requestId: string, data:
 }
 
 export async function deleteTestRequest(planId: string, requestId: string): Promise<void> {
-  return fetchAPI<void>(`/executionplans/${planId}/requests/${requestId}`, {
+  return fetchAPI<void>(`/loadtestsplans/${planId}/requests/${requestId}`, {
     method: 'DELETE',
     requireAuth: true,
   });
@@ -225,7 +225,7 @@ export interface MoveTestRequestRequest {
 }
 
 export async function reorderTestRequests(planId: string, data: ReorderTestRequestsRequest): Promise<void> {
-  return fetchAPI<void>(`/executionplans/${planId}/reorder`, {
+  return fetchAPI<void>(`/loadtestsplans/${planId}/reorder`, {
     method: 'PUT',
     body: JSON.stringify(data),
     requireAuth: true,
@@ -233,7 +233,7 @@ export async function reorderTestRequests(planId: string, data: ReorderTestReque
 }
 
 export async function moveTestRequest(planId: string, requestId: string, data: MoveTestRequestRequest): Promise<void> {
-  return fetchAPI<void>(`/executionplans/${planId}/requests/${requestId}/move`, {
+  return fetchAPI<void>(`/loadtestsplans/${planId}/requests/${requestId}/move`, {
     method: 'PUT',
     body: JSON.stringify(data),
     requireAuth: true,
@@ -246,11 +246,11 @@ export interface CreateLoadTestExecutionRequest {
 }
 
 export interface GetLoadTestExecutionsResponse {
-  loadTestExecutions: LoadTestExecution[];
+  loadtestsexecutions: (LoadTestExecution & { loadtests: any[] })[];
 }
 
 export async function createLoadTestExecution(data: CreateLoadTestExecutionRequest): Promise<LoadTestExecution> {
-  return fetchAPI<LoadTestExecution>('/loadtestexecutions', {
+  return fetchAPI<LoadTestExecution>('/loadtestsexecutions', {
     method: 'POST',
     body: JSON.stringify(data),
     requireAuth: true,
@@ -259,8 +259,8 @@ export async function createLoadTestExecution(data: CreateLoadTestExecutionReque
 
 export async function getLoadTestExecutions(executionPlanId?: string): Promise<GetLoadTestExecutionsResponse> {
   const url = executionPlanId 
-    ? `/loadtestexecutions?executionPlanId=${executionPlanId}` 
-    : '/loadtestexecutions';
+    ? `/loadtestsexecutions?executionPlanId=${executionPlanId}` 
+    : '/loadtestsexecutions';
   return fetchAPI<GetLoadTestExecutionsResponse>(url, {
     method: 'GET',
     requireAuth: true,
@@ -268,25 +268,43 @@ export async function getLoadTestExecutions(executionPlanId?: string): Promise<G
 }
 
 export async function getLoadTestExecution(id: string): Promise<LoadTestExecution> {
-  return fetchAPI<LoadTestExecution>(`/loadtestexecutions/${id}`, {
+  return fetchAPI<LoadTestExecution>(`/loadtestsexecutions/${id}`, {
     method: 'GET',
     requireAuth: true,
   });
 }
 
 export interface GetLoadTestExecutionResultsResponse {
-  testResults: TestResult[];
+  result: {
+    id: string;
+    avgLatency?: number;
+    p95Latency?: number;
+    successRate?: number;
+    resultTimestamp?: string;
+    minLatency?: number;
+    maxLatency?: number;
+    p50Latency?: number;
+    p99Latency?: number;
+    totalRequests?: number;
+    testDuration?: string;
+    actualRate?: number;
+    throughput?: number;
+    bytesIn?: number;
+    bytesOut?: number;
+    statusCodes?: Record<string, number>;
+    errorDetails?: string[];
+  };
 }
 
 export async function getLoadTestExecutionResults(id: string): Promise<GetLoadTestExecutionResultsResponse> {
-  return fetchAPI<GetLoadTestExecutionResultsResponse>(`/loadtestexecutions/${id}/results`, {
+  return fetchAPI<GetLoadTestExecutionResultsResponse>(`/loadtestsexecutions/${id}/results`, {
     method: 'GET',
     requireAuth: true,
   });
 }
 
 export async function updateLoadTestExecution(id: string, data: Partial<LoadTestExecution>): Promise<LoadTestExecution> {
-  return fetchAPI<LoadTestExecution>(`/loadtestexecutions/${id}`, {
+  return fetchAPI<LoadTestExecution>(`/loadtestsexecutions/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
     requireAuth: true,
@@ -294,8 +312,70 @@ export async function updateLoadTestExecution(id: string, data: Partial<LoadTest
 }
 
 export async function deleteLoadTestExecution(id: string): Promise<void> {
-  return fetchAPI<void>(`/loadtestexecutions/${id}`, {
+  return fetchAPI<void>(`/loadtestsexecutions/${id}`, {
     method: 'DELETE',
     requireAuth: true,
   });
+}
+
+export async function downloadLoadTestExecution(id: string): Promise<{ filename: string; instructions: any }> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`${API_URL}/loadtestsexecutions/${id}/download`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Download failed' }));
+    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+  }
+
+  // Get the JSON data
+  const jsonData = await response.json();
+
+  // Extract filename from the instructions.step2 command
+  let filename = 'execution-plan.json';
+  if (jsonData.instructions && jsonData.instructions.step2) {
+    const match = jsonData.instructions.step2.match(/~\/Downloads\/(.+?)(?:\s|$)/);
+    if (match) {
+      filename = match[1];
+    }
+  }
+
+  // Fallback: Try to get filename from Content-Disposition header
+  if (filename === 'execution-plan.json') {
+    const contentDisposition = response.headers.get('Content-Disposition');
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+      const filenameStarMatch = contentDisposition.match(/filename\*=UTF-8''(.+?)(?:;|$)/);
+      
+      if (filenameStarMatch) {
+        filename = decodeURIComponent(filenameStarMatch[1]);
+      } else if (filenameMatch) {
+        filename = filenameMatch[1];
+      }
+    }
+  }
+
+  // Create blob and download with the correct filename
+  const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+
+  return {
+    filename,
+    instructions: jsonData.instructions
+  };
 }

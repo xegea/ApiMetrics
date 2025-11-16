@@ -65,7 +65,7 @@ interface MoveTestRequestBody {
 }
 
 /**
- * POST /executionplans
+ * POST /loadtestsplans
  * Create a new execution plan with a default GET request
  */
 async function createExecutionPlan(
@@ -147,7 +147,7 @@ async function createExecutionPlan(
 }
 
 /**
- * GET /executionplans
+ * GET /loadtestsplans
  * Get all execution plans for a tenant with their test requests
  */
 async function getExecutionPlans(
@@ -212,7 +212,7 @@ async function getExecutionPlans(
 
     return reply.send({
       tenantId,
-      executionPlans: executionPlans.map((plan: any) => ({
+      loadtestplans: executionPlans.map((plan: any) => ({
         id: plan.id,
         name: plan.name,
         executionTime: plan.executionTime,
@@ -239,7 +239,7 @@ async function getExecutionPlans(
     if (error?.code === 'P2021' || error?.message?.includes('does not exist')) {
       return reply.code(200).send({ 
         tenantId: ensured?.tenantId || 'unknown',
-        executionPlans: [] 
+        loadtestplans: [] 
       });
     }
     
@@ -248,7 +248,7 @@ async function getExecutionPlans(
 }
 
 /**
- * POST /executionplans/requests
+ * POST /loadtestsplans/requests
  * Create a new test request within an execution plan
  */
 async function createTestRequest(
@@ -345,7 +345,7 @@ async function createTestRequest(
 }
 
 /**
- * DELETE /executionplans/:id
+ * DELETE /loadtestsplans/:id
  * Delete an execution plan and all its test requests
  */
 async function deleteExecutionPlan(
@@ -483,7 +483,7 @@ async function updateExecutionPlan(
 }
 
 /**
- * PUT /executionplans/:planId/requests/:requestId
+ * PUT /loadtestsplans/:planId/requests/:requestId
  * Update a test request
  */
 async function updateTestRequest(
@@ -561,7 +561,7 @@ async function updateTestRequest(
 }
 
 /**
- * DELETE /executionplans/:planId/requests/:requestId
+ * DELETE /loadtestsplans/:planId/requests/:requestId
  * Delete a test request
  */
 async function deleteTestRequest(
@@ -608,7 +608,7 @@ async function deleteTestRequest(
 }
 
 /**
- * PUT /executionplans/:planId/reorder
+ * PUT /loadtestsplans/:planId/reorder
  * Reorder test requests within an execution plan
  */
 async function reorderTestRequests(
@@ -666,7 +666,7 @@ async function reorderTestRequests(
 }
 
 /**
- * PUT /executionplans/:planId/requests/:requestId/move
+ * PUT /loadtestsplans/:planId/requests/:requestId/move
  * Move a test request to a different execution plan
  */
 async function moveTestRequest(
@@ -741,19 +741,19 @@ async function moveTestRequest(
   }
 }
 
-export async function executionPlansRoutes(fastify: FastifyInstance) {
+export async function loadTestPlansRoutes(fastify: FastifyInstance) {
   console.log('Registering execution plans routes...');
   
   // Protected routes (require authentication)
-  fastify.post<{ Body: CreateExecutionPlanBody }>('/executionplans', { preHandler: verifyToken }, createExecutionPlan);
-  fastify.put<{ Params: UpdateExecutionPlanParams; Body: UpdateExecutionPlanBody }>('/executionplans/:id', { preHandler: verifyToken }, updateExecutionPlan);
-  fastify.put<{ Params: { planId: string }; Body: ReorderTestRequestsBody }>('/executionplans/:planId/reorder', { preHandler: verifyToken }, reorderTestRequests);
-  fastify.put<{ Params: UpdateTestRequestParams; Body: UpdateTestRequestBody }>('/executionplans/:planId/requests/:requestId', { preHandler: verifyToken }, updateTestRequest);
-  fastify.put<{ Params: { planId: string; requestId: string }; Body: MoveTestRequestBody }>('/executionplans/:planId/requests/:requestId/move', { preHandler: verifyToken }, moveTestRequest);
-  fastify.post<{ Body: CreateTestRequestBody }>('/executionplans/requests', { preHandler: verifyToken }, createTestRequest);
-  fastify.delete<{ Params: DeleteTestRequestParams }>('/executionplans/:planId/requests/:requestId', { preHandler: verifyToken }, deleteTestRequest);
-  fastify.delete<{ Params: DeleteExecutionPlanParams }>('/executionplans/:id', { preHandler: verifyToken }, deleteExecutionPlan);
+  fastify.post<{ Body: CreateExecutionPlanBody }>('/loadtestsplans', { preHandler: verifyToken }, createExecutionPlan);
+  fastify.put<{ Params: UpdateExecutionPlanParams; Body: UpdateExecutionPlanBody }>('/loadtestsplans/:id', { preHandler: verifyToken }, updateExecutionPlan);
+  fastify.put<{ Params: { planId: string }; Body: ReorderTestRequestsBody }>('/loadtestsplans/:planId/reorder', { preHandler: verifyToken }, reorderTestRequests);
+  fastify.put<{ Params: UpdateTestRequestParams; Body: UpdateTestRequestBody }>('/loadtestsplans/:planId/requests/:requestId', { preHandler: verifyToken }, updateTestRequest);
+  fastify.put<{ Params: { planId: string; requestId: string }; Body: MoveTestRequestBody }>('/loadtestsplans/:planId/requests/:requestId/move', { preHandler: verifyToken }, moveTestRequest);
+  fastify.post<{ Body: CreateTestRequestBody }>('/loadtestsplans/requests', { preHandler: verifyToken }, createTestRequest);
+  fastify.delete<{ Params: DeleteTestRequestParams }>('/loadtestsplans/:planId/requests/:requestId', { preHandler: verifyToken }, deleteTestRequest);
+  fastify.delete<{ Params: DeleteExecutionPlanParams }>('/loadtestsplans/:id', { preHandler: verifyToken }, deleteExecutionPlan);
   
   // Authenticated route - returns execution plans for the caller's tenant
-  fastify.get<{ Querystring: GetExecutionPlansQuery }>('/executionplans', { preHandler: verifyToken }, getExecutionPlans);
+  fastify.get<{ Querystring: GetExecutionPlansQuery }>('/loadtestsplans', { preHandler: verifyToken }, getExecutionPlans);
 }

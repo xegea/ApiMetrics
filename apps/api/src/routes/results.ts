@@ -94,16 +94,15 @@ async function postResults(
       return reply.code(404).send({ error: 'Load test execution not found' });
     }
 
-    // Update the execution with results and mark as completed
-    const updated = await (prisma as any).loadTestExecution.update({
-      where: { id: result.executionId },
+    // Create a new TestResult record
+    const testResult = await (prisma.testResult as any).create({
       data: {
+        loadTestExecutionId: result.executionId,
+        testId: `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         avgLatency: result.avgLatency,
         p95Latency: result.p95Latency,
         successRate: result.successRate,
-        resultTimestamp: new Date(result.timestamp),
-        status: 'completed',
-        updatedAt: new Date(),
+        timestamp: new Date(result.timestamp),
         // Comprehensive metrics from Vegeta
         minLatency: result.minLatency,
         maxLatency: result.maxLatency,
@@ -120,14 +119,49 @@ async function postResults(
       },
     });
 
+    // Also update the LoadTestExecution with the latest metrics for quick access
+    await (prisma.loadTestExecution as any).update({
+      where: { id: result.executionId },
+      data: {
+        avgLatency: result.avgLatency,
+        p95Latency: result.p95Latency,
+        successRate: result.successRate,
+        resultTimestamp: new Date(result.timestamp),
+        minLatency: result.minLatency,
+        maxLatency: result.maxLatency,
+        p50Latency: result.p50Latency,
+        p99Latency: result.p99Latency,
+        totalRequests: result.requests,
+        testDuration: result.duration,
+        actualRate: result.rate,
+        throughput: result.throughput,
+        bytesIn: result.bytesIn,
+        bytesOut: result.bytesOut,
+        statusCodes: result.statusCodes ? JSON.stringify(result.statusCodes) : null,
+        errorDetails: result.errors ? JSON.stringify(result.errors) : null,
+        status: 'completed',
+        updatedAt: new Date(),
+      },
+    });
+
     return reply.code(201).send({
-      id: updated.id,
+      id: testResult.id,
       message: 'Test result saved successfully',
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
     request.log.error(error, 'Error saving test result');
-    console.error('Error saving test result:', errorMessage);
+    console.error('=== ERROR SAVING TEST RESULT ===');
+    console.error('Error Message:', errorMessage);
+    console.error('Error Stack:', errorStack);
+    console.error('Result Data:', {
+      executionId: result.executionId,
+      avgLatency: result.avgLatency,
+      p95Latency: result.p95Latency,
+      successRate: result.successRate,
+    });
+    console.error('================================');
     return reply
       .code(500)
       .send({ error: 'Failed to save test result', details: errorMessage });
@@ -161,27 +195,13 @@ async function getResults(
       return reply.code(404).send({ error: 'Test result not found' });
     }
 
-    // Return in the format expected by the dashboard with all detailed metrics
+    // Return in the format expected by the dashboard
     return reply.send({
       id: execution.id,
-      testId: execution.id, // For backwards compatibility
-      avgLatency: execution.avgLatency ? Math.round(execution.avgLatency / 1000000) : 0,
-      p95Latency: execution.p95Latency ? Math.round(execution.p95Latency / 1000000) : 0,
-      successRate: execution.successRate || 0,
-      timestamp: execution.resultTimestamp?.toISOString() || execution.updatedAt.toISOString(),
-      // Detailed metrics from Vegeta
-      minLatency: execution.minLatency ? Math.round(execution.minLatency / 1000000) : undefined,
-      maxLatency: execution.maxLatency ? Math.round(execution.maxLatency / 1000000) : undefined,
-      p50Latency: execution.p50Latency ? Math.round(execution.p50Latency / 1000000) : undefined,
-      p99Latency: execution.p99Latency ? Math.round(execution.p99Latency / 1000000) : undefined,
-      totalRequests: execution.totalRequests || undefined,
-      testDuration: execution.testDuration || undefined,
-      actualRate: execution.actualRate || undefined,
-      throughput: execution.throughput || undefined,
-      bytesIn: execution.bytesIn || undefined,
-      bytesOut: execution.bytesOut || undefined,
-      statusCodes: execution.statusCodes ? JSON.parse(execution.statusCodes) : undefined,
-      errorDetails: execution.errorDetails ? JSON.parse(execution.errorDetails) : undefined,
+      avgLatency: execution.avgLatency,
+      p95Latency: execution.p95Latency,
+      successRate: execution.successRate,
+      timestamp: execution.updatedAt.toISOString(),
     });
   } catch (error) {
     request.log.error(error, 'Error fetching test result');
@@ -217,24 +237,10 @@ async function listResults(
       .filter((exec: any) => exec.avgLatency !== null)
       .map((exec: any) => ({
         id: exec.id,
-        testId: exec.id, // For backwards compatibility
-        avgLatency: exec.avgLatency ? Math.round(exec.avgLatency / 1000000) : 0,
-        p95Latency: exec.p95Latency ? Math.round(exec.p95Latency / 1000000) : 0,
-        successRate: exec.successRate || 0,
-        timestamp: exec.resultTimestamp?.toISOString() || exec.updatedAt.toISOString(),
-        // Detailed metrics from Vegeta
-        minLatency: exec.minLatency ? Math.round(exec.minLatency / 1000000) : undefined,
-        maxLatency: exec.maxLatency ? Math.round(exec.maxLatency / 1000000) : undefined,
-        p50Latency: exec.p50Latency ? Math.round(exec.p50Latency / 1000000) : undefined,
-        p99Latency: exec.p99Latency ? Math.round(exec.p99Latency / 1000000) : undefined,
-        totalRequests: exec.totalRequests || undefined,
-        testDuration: exec.testDuration || undefined,
-        actualRate: exec.actualRate || undefined,
-        throughput: exec.throughput || undefined,
-        bytesIn: exec.bytesIn || undefined,
-        bytesOut: exec.bytesOut || undefined,
-        statusCodes: exec.statusCodes ? JSON.parse(exec.statusCodes) : undefined,
-        errorDetails: exec.errorDetails ? JSON.parse(exec.errorDetails) : undefined,
+        avgLatency: exec.avgLatency,
+        p95Latency: exec.p95Latency,
+        successRate: exec.successRate,
+        timestamp: exec.updatedAt.toISOString(),
       }));
 
     return reply.send(response);

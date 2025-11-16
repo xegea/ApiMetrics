@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createExecutionPlan, getExecutionPlans, createTestRequest, ExecutionPlan, TestRequest, reorderTestRequests, moveTestRequest, deleteExecutionPlan, deleteTestRequest, updateExecutionPlan, updateTestRequest, createLoadTestExecution } from '@/lib/api';
+import { useState, useEffect, useRef } from 'react';
+import { createExecutionPlan, getLoadTestPlans, createTestRequest, ExecutionPlanWithRequests, TestRequest, reorderTestRequests, moveTestRequest, deleteExecutionPlan, deleteTestRequest, updateExecutionPlan, updateTestRequest, createLoadTestExecution } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import BorderColorIcon from '@mui/icons-material/BorderColor';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -50,7 +50,7 @@ interface SortableTestRequestProps {
   onTryIt: (request: TestRequest) => void;
 }
 
-function DroppablePlan({ plan, planKey, children }: { plan: ExecutionPlan; planKey: string; children: React.ReactNode }) {
+function DroppablePlan({ plan, planKey, children }: { plan: ExecutionPlanWithRequests; planKey: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({
     id: planKey,
     data: { type: 'plan', plan },
@@ -196,7 +196,7 @@ function SortableTestRequest({ request, planId, getMethodColor, onEdit, onDelete
 
 export default function ExecutionPlansPage() {
   const { user, session } = useAuth();
-  const [executionPlans, setExecutionPlans] = useState<ExecutionPlan[]>([]);
+  const [executionPlans, setExecutionPlans] = useState<ExecutionPlanWithRequests[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [expandedPlans, setExpandedPlans] = useState<string[]>([]);
@@ -227,6 +227,7 @@ export default function ExecutionPlansPage() {
   const [testingRequest, setTestingRequest] = useState<TestRequest | null>(null);
   const [testResponse, setTestResponse] = useState<{status: number; statusText: string; headers: Record<string, string>; body: string; error?: string} | null>(null);
   const [isTestLoading, setIsTestLoading] = useState(false);
+  const hasInitialized = useRef(false);
 
   const parseEndpoint = (endpoint: string) => {
     try {
@@ -247,7 +248,7 @@ export default function ExecutionPlansPage() {
     return text.substring(0, maxLength) + '...';
   };
 
-  const getPlanConfigSummary = (plan: ExecutionPlan) => {
+  const getPlanConfigSummary = (plan: ExecutionPlanWithRequests) => {
     const parts = [];
     if (plan.executionTime) parts.push(`Time: ${plan.executionTime}`);
     if (plan.delayBetweenRequests) parts.push(`Delay: ${plan.delayBetweenRequests}`);
@@ -297,16 +298,17 @@ export default function ExecutionPlansPage() {
   };
 
   useEffect(() => {
-    if (session?.user?.email) {
+    if (session?.user?.email && !hasInitialized.current) {
+      hasInitialized.current = true;
       listExecutionPlans();
     }
-  }, [session]);
+  }, [session?.user?.email]);
 
   const listExecutionPlans = async () => {
     try {
       setLoading(true);
-      const plans = await getExecutionPlans();
-      setExecutionPlans(plans.executionPlans);
+      const plans = await getLoadTestPlans();
+      setExecutionPlans(plans.loadtestplans);
     } catch (error) {
       alert('Error loading execution plans: ' + (error as Error).message);
     } finally {
@@ -342,16 +344,25 @@ export default function ExecutionPlansPage() {
     }
   };
 
-  const handleRunLoadTest = async (plan: ExecutionPlan) => {
+  const handleRunLoadTest = async (plan: ExecutionPlanWithRequests) => {
     try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const now = new Date();
+      const timestamp = now.toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).replace(/\//g, '-').replace(/, /g, ' ');
       const name = `${plan.name} - ${timestamp}`;
-      await createLoadTestExecution({
+      const execution = await createLoadTestExecution({
         executionPlanId: plan.id,
         name,
       });
-      // Navigate to load tests executions page where the new execution will be auto-expanded
-      window.location.href = '/load-tests-executions';
+      // Navigate to load tests executions page with the new execution ID to auto-expand it
+      window.location.href = `/loadtestsexecutions?expandId=${execution.id}`;
     } catch (error) {
       alert('Error creating load test execution: ' + (error as Error).message);
     }
@@ -833,17 +844,6 @@ export default function ExecutionPlansPage() {
       <div className="max-w-6xl mx-auto">
         <h1 className="text-4xl font-bold text-gray-800 text-center mb-8">Load Tests Plans</h1>
 
-        <div className="text-center mb-6">
-          <button onClick={() => {
-            if (session?.access_token) {
-              navigator.clipboard.writeText(session.access_token);
-              alert('JWT Token copied!');
-            }
-          }} className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition">
-            Copy JWT Token for Postman
-          </button>
-        </div>
-
         {loading && <div className="text-center"><div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>}
 
         {!loading && executionPlans.length > 0 && (
@@ -876,9 +876,9 @@ export default function ExecutionPlansPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); handleRunLoadTest(plan); }} className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600 flex items-center gap-1" title="Go to Run Load Tests">
+                        <button onClick={(e) => { e.stopPropagation(); handleRunLoadTest(plan); }} className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 flex items-center gap-1" title="New Load Test">
                           <PlayCircleIcon fontSize="small" />
-                          <span>Go to Run Load Tests</span>
+                          <span>New Load Test</span>
                         </button>
                         <button onClick={(e) => { e.stopPropagation(); setRenamingPlan(plan.id); setRenameValue(plan.name); }} className="p-1 rounded text-gray-600 hover:text-blue-600 hover:bg-blue-50" title="Rename">
                           <BorderColorIcon fontSize="small" />
@@ -1310,7 +1310,7 @@ export default function ExecutionPlansPage() {
                   />
                 </div>
                 <div className="flex gap-3 pt-4">
-                  <button onClick={handleSaveEditTestRequest} className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Save Changes</button>
+                  <button onClick={handleSaveEditTestRequest} className="px-6 py-2 bg-green-500 text-white rounded hover:bg-green-600">Save Changes</button>
                   <button onClick={() => setEditingRequest(null)} className="px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">Cancel</button>
                 </div>
               </div>
@@ -1399,7 +1399,7 @@ export default function ExecutionPlansPage() {
         )}
 
         {!showForm && executionPlans.length > 0 && (
-          <button onClick={() => setShowForm(true)} className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600">
+          <button onClick={() => setShowForm(true)} className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
             Create New Execution Plan
           </button>
         )}

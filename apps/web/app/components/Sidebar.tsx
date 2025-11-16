@@ -34,8 +34,8 @@ const menuItems: MenuItem[] = [
     label: 'Load Tests',
     icon: 'folder',
     children: [
-      { label: 'Load Tests Plans', href: '/executionplans' },
-      { label: 'Load Tests Executions', href: '/load-tests-executions' },
+      { label: 'Load Tests Plans', href: '/loadtestsplans' },
+      { label: 'Load Tests Executions', href: '/loadtestsexecutions' },
     ],
   },
   {
@@ -50,8 +50,26 @@ const menuItems: MenuItem[] = [
 export function Sidebar() {
   const { user, loading } = useAuth();
   const pathname = usePathname();
+  
+  // Function to check if any child of a section is active
+  const isChildActive = (children?: MenuItem[]): boolean => {
+    if (!children) return false;
+    return children.some(child => isActive(child.href || ''));
+  };
+
+  // Initialize expanded sections with Load Tests expanded by default and when a child is active
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['Test Endpoints', 'Metrics'])
+    () => {
+      const initial = new Set(['Load Tests', 'Metrics']);
+      // Auto-expand Load Tests if any of its children are active
+      const loadTestsActive = menuItems
+        .find(item => item.label === 'Load Tests')
+        ?.children?.some(child => pathname === child.href);
+      if (loadTestsActive) {
+        initial.add('Load Tests');
+      }
+      return initial;
+    }
   );
 
   // Hide sidebar if still loading or not logged in

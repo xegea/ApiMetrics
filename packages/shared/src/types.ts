@@ -59,14 +59,28 @@ export interface CreateTestRequestRequest {
  */
 export interface LoadTestExecution {
   id: string;
-  executionPlanId: string;
   name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * An individual execution from the API metrics CLI
+ */
+export interface Execution {
+  id: string;
+  loadTestExecutionId: string;
   status: 'running' | 'completed' | 'failed';
+  command: string;
+  output?: string;
+  error?: string;
+  startedAt: string;
+  completedAt?: string;
+  // Metrics from the CLI execution
   avgLatency?: number; // Average latency in nanoseconds
   p95Latency?: number; // P95 latency in nanoseconds
   successRate?: number; // Success rate as decimal (0-1)
   resultTimestamp?: string; // Timestamp of when results were recorded
-  // Detailed metrics from Vegeta
   minLatency?: number; // Minimum latency in nanoseconds
   maxLatency?: number; // Maximum latency in nanoseconds
   p50Latency?: number; // P50 latency in nanoseconds
@@ -79,7 +93,32 @@ export interface LoadTestExecution {
   bytesOut?: number; // Total bytes sent
   statusCodes?: Record<string, number>; // Status code counts
   errorDetails?: string[]; // Error details
+}
+
+/**
+ * A load test execution with its loadtests
+ */
+export interface LoadTestExecutionWithExecutions {
+  id: string;
+  name: string;
+  loadTestPlanId: string;
   createdAt: string;
   updatedAt: string;
+  loadtests: Execution[];
+}
+
+/**
+ * An execution plan with its load test executions
+ */
+export interface LoadTestPlan {
+  id: string;
+  name: string;
+  executionTime: string;
+  delayBetweenRequests?: string;
+  iterations: number;
+  rampUpPeriods?: string;
+  createdAt: string;
+  updatedAt: string;
+  loadTestExecutions: LoadTestExecution[];
 }
 

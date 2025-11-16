@@ -2,8 +2,8 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { resultsRoutes } from './routes/results';
 import { authRoutes } from './routes/auth';
-import { executionPlansRoutes } from './routes/executionplans';
-import loadTestExecutionsRoutes from './routes/loadtestexecutions';
+import { loadTestPlansRoutes } from './routes/loadtestsplans';
+import { loadTestExecutionsRoutes } from './routes/loadtestsexecutions';
 
 const server = Fastify({
   logger: true,
@@ -17,7 +17,7 @@ server.register(cors, {
 // Register routes
 server.register(resultsRoutes);
 server.register(authRoutes);
-server.register(executionPlansRoutes);
+server.register(loadTestPlansRoutes);
 server.register(loadTestExecutionsRoutes);
 
 // Health check endpoint
