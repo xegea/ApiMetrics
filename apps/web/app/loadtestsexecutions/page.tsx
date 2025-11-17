@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getLoadTestExecutions, deleteLoadTestExecution, downloadLoadTestExecution, deleteTestResult } from '@/lib/api';
 
@@ -251,6 +251,51 @@ function LoadTestResultCard({ loadtest, index, isExpanded, onToggle, onDelete }:
                     <div className="text-sm text-orange-800 font-medium">RPS</div>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Request Summary Totals */}
+          {loadtest.requestMetricSummaries && loadtest.requestMetricSummaries.length > 0 && (
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">Load Test Summary</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                {(() => {
+                  const totalRequests = loadtest.requestMetricSummaries!.reduce((sum, r) => {
+                    const { totalRequests: rTotal } = getRequestStatusCounts(r);
+                    return sum + rTotal;
+                  }, 0);
+                  const totalSuccess = loadtest.requestMetricSummaries!.reduce((sum, r) => {
+                    const { successCount } = getRequestStatusCounts(r);
+                    return sum + successCount;
+                  }, 0);
+                  const totalErrors = loadtest.requestMetricSummaries!.reduce((sum, r) => {
+                    const { errorsCount } = getRequestStatusCounts(r);
+                    return sum + errorsCount;
+                  }, 0);
+                  const successRatio = totalRequests > 0 ? (totalSuccess / totalRequests * 100).toFixed(1) + '%' : 'N/A';
+
+                  return (
+                    <>
+                      <div className="p-3 text-center">
+                        <div className="text-gray-600 font-semibold">Total Requests</div>
+                        <div className="font-extrabold text-2xl text-gray-900">{totalRequests}</div>
+                      </div>
+                      <div className="p-3 text-center">
+                        <div className="text-gray-600 font-semibold">Success</div>
+                        <div className="font-extrabold text-2xl text-green-600">{totalSuccess}</div>
+                      </div>
+                      <div className="p-3 text-center">
+                        <div className="text-gray-600 font-semibold">Errors</div>
+                        <div className="font-extrabold text-2xl text-red-600">{totalErrors}</div>
+                      </div>
+                      <div className="p-3 text-center">
+                        <div className="text-gray-600 font-semibold">Success Ratio</div>
+                        <div className="font-extrabold text-2xl text-blue-600">{successRatio}</div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -658,44 +703,28 @@ function LoadTestsExecutionsPage() {
                       const totalErrors = loadtestsWithTotals.reduce((sum, t) => sum + (t.computedErrorCount || 0), 0);
                       const totalSuccess = totalRequests - totalErrors;
 
-                      // Build request summary cards for the latest run (fallback to [] if missing)
-                      const latestSummaryCards = sortedLoadtests.length > 0 ? (sortedLoadtests[sortedLoadtests.length - 1].requestMetricSummaries || []).map((r: any) => {
+                      // Build request summary rows for the latest run (fallback to [] if missing)
+                      const latestSummaries = sortedLoadtests.length > 0 ? (sortedLoadtests[sortedLoadtests.length - 1].requestMetricSummaries || []) : [];
+                      const latestSummaryRows = latestSummaries.map((r: any) => {
                         const { totalRequests: rTotal, successCount: rSuccessCount, errorsCount: rErrorsCount, successRate: rSuccessRate } = getRequestStatusCounts(r);
                         return (
-                          <div key={r.id} className="bg-white border rounded p-3 text-gray-900">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="text-sm font-semibold text-gray-700">{r.method}</div>
-                                <div className="text-sm text-blue-600 break-all">{r.target}</div>
-                              </div>
-                              <div className="text-sm text-gray-600 font-medium">{rTotal} requests</div>
-                            </div>
-
-                            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                              <div>
-                                <div className="text-gray-500">Avg</div>
-                                <div className="font-medium text-gray-800">{formatLatencyFromString(r.avgLatency)}</div>
-                              </div>
-                              <div>
-                                <div className="text-gray-500">Success</div>
-                                <div className="font-medium text-gray-800">{typeof r.successRate === 'number' ? (r.successRate * 100).toFixed(1) + '%' : (rTotal > 0 ? (rSuccessRate * 100).toFixed(1) + '%' : 'N/A')}</div>
-                              </div>
-                              <div>
-                                <div className="text-gray-500">Min</div>
-                                <div className="font-medium text-gray-800">{formatLatencyFromString(r.minLatency)}</div>
-                              </div>
-                              <div>
-                                <div className="text-gray-500">Max</div>
-                                <div className="font-medium text-gray-800">{formatLatencyFromString(r.maxLatency)}</div>
-                              </div>
-                            </div>
-
-                            {rErrorsCount > 0 && (
-                              <div className="mt-3 bg-red-50 border border-red-200 rounded p-2 text-sm text-red-800">Errors: {rErrorsCount}{r.errors && r.errors.length > 0 ? ` — ${r.errors.join('; ')}` : ''}</div>
-                            )}
-                          </div>
+                          <tr key={r.id} className="border-t">
+                            <td className="px-3 py-2">{r.requestIndex + 1}</td>
+                            <td className="px-3 py-2 font-medium text-gray-800">{r.method}</td>
+                            {/* Endpoint: allow wrapping so long URLs wrap to multiple lines instead of truncating */}
+                            <td className="px-3 py-2 break-words whitespace-normal text-blue-700 max-w-[560px]">{r.target}</td>
+                            <td className="px-3 py-2 text-right text-gray-800">{rTotal}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.avgLatency)}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.minLatency)}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.maxLatency)}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.p50Latency)}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.p95Latency)}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.p99Latency)}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">{typeof r.successRate === 'number' ? (r.successRate * 100).toFixed(1) + '%' : (rTotal > 0 ? (rSuccessRate * 100).toFixed(1) + '%' : 'N/A')}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">{rErrorsCount}</td>
+                          </tr>
                         );
-                      }) : [];
+                      });
                       
                       return (
                       <div className="mb-6 bg-gradient-to-br from-slate-50 to-blue-50 border border-slate-200 rounded-xl p-6 shadow-lg">
@@ -840,8 +869,43 @@ function LoadTestsExecutionsPage() {
                         {sortedLoadtests.length > 0 && sortedLoadtests[sortedLoadtests.length - 1].requestMetricSummaries && (
                           <div className="mt-6">
                             <h3 className="text-lg font-semibold text-gray-800 mb-3">Requests Summary (Latest)</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {latestSummaryCards}
+                            <div className="border rounded-lg bg-white overflow-x-auto">
+                              {/*
+                                - Horizontal scrolling allowed by outer container (overflow-x-auto)
+                                - Vertical scrolling enabled on inner wrapper with sticky header
+                                - Set a max-height to show up to ~10 rows; adjust as needed
+                              */}
+                              <div className="max-h-[480px] overflow-y-auto">
+                                <table className="min-w-full text-sm text-gray-800">
+                                <thead className="bg-gray-50">
+                                    {/* Make header sticky so it remains visible when scrolling vertically */}
+                                  <tr>
+                                    <th className="px-3 py-2 text-left sticky top-0 bg-gray-50 z-10">#</th>
+                                    <th className="px-3 py-2 text-left sticky top-0 bg-gray-50 z-10">Method</th>
+                                    <th className="px-3 py-2 text-left sticky top-0 bg-gray-50 z-10">Endpoint</th>
+                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Requests</th>
+                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Avg</th>
+                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Min</th>
+                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Max</th>
+                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">P50</th>
+                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">P95</th>
+                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">P99</th>
+                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Success</th>
+                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Errors</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {/*
+                                    For long endpoints: allow wrapping so cells fit vertically
+                                    while keeping numeric fields single-line for horizontal scroll.
+                                  */}
+                                  {latestSummaryRows.map((r: any) => (
+                                    // ensure consistent row height so that max-height corresponds to 10 rows
+                                    React.cloneElement(r, { className: (r.props.className || '') + ' h-12' })
+                                  ))}
+                                </tbody>
+                              </table>
+                              </div>
                             </div>
                           </div>
                         )}
