@@ -56,7 +56,7 @@ npm start
 ```
 app/
   ├── layout.tsx          # Root layout with providers
-  ├── page.tsx            # Home page (redirects to dashboard)
+  ├── page.tsx            # Home page (redirects to Test Executions)
   ├── login/              # Login page
   │   └── page.tsx
   ├── dashboard/          # (removed) Dashboard with test results list

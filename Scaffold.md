@@ -52,7 +52,7 @@ Details:
 - Language: Node.js + TypeScript
 - Functionality:
   1. POST /results → accept uploaded JSON from CLI
-  2. GET /results/:id → return metrics for dashboard
+  2. GET /results/:id → return metrics for Test Executions
   3. POST /auth/login → JWT-based auth
 - Use Prisma to connect to PostgreSQL (Supabase)
 - Import types from "@apimetrics/shared"
@@ -76,7 +76,7 @@ Details:
 - Next.js 15 (App Router)
 - Pages:
   - /login → user login
-  - /dashboard → list of tests + basic metrics
+  - /loadtestsexecutions → list of tests + basic metrics
   - /test/[id] → charts (avg latency, p95, success rate) using Recharts
 - Fetch data from APIMETRICS_API_URL (env variable)
 - Tailwind CSS for styling

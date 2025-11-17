@@ -193,7 +193,7 @@ NEXT_PUBLIC_API_URL=https://your-api-url.onrender.com
 ### 3.5 Verify Deployment
 
 1. Visit your Vercel deployment URL
-2. You should be redirected to `/dashboard` or `/login`
+2. You should be redirected to `/loadtestsexecutions` or `/login`
 3. Test the login flow (you'll need to create a user first via API or database)
 
 ### 3.6 Set Up Automatic Deployments
