@@ -1,4 +1,4 @@
-import { TestResult, LoadTestExecution } from '@apimetrics/shared';
+import { TestResult, LoadTestExecution, RequestMetric } from '@apimetrics/shared';
 import { supabase } from './supabase';
 
 const API_URL = process.env.NEXT_PUBLIC_APIMETRICS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -274,41 +274,8 @@ export async function getLoadTestExecutions(executionPlanId?: string): Promise<G
   });
 }
 
-export async function getLoadTestExecution(id: string): Promise<LoadTestExecution> {
-  return fetchAPI<LoadTestExecution>(`/loadtestsexecutions/${id}`, {
-    method: 'GET',
-    requireAuth: true,
-  });
-}
-
-export interface GetLoadTestExecutionResultsResponse {
-  result: {
-    id: string;
-    avgLatency?: number;
-    p95Latency?: number;
-    successRate?: number;
-    resultTimestamp?: string;
-    minLatency?: number;
-    maxLatency?: number;
-    p50Latency?: number;
-    p99Latency?: number;
-    totalRequests?: number;
-    testDuration?: string;
-    actualRate?: number;
-    throughput?: number;
-    bytesIn?: number;
-    bytesOut?: number;
-    statusCodes?: Record<string, number>;
-    errorDetails?: string[];
-  };
-}
-
-export async function getLoadTestExecutionResults(id: string): Promise<GetLoadTestExecutionResultsResponse> {
-  return fetchAPI<GetLoadTestExecutionResultsResponse>(`/loadtestsexecutions/${id}/results`, {
-    method: 'GET',
-    requireAuth: true,
-  });
-}
+// Removed: getLoadTestExecution(id) - No longer used, all data is included in getLoadTestExecutions()
+// Removed: getLoadTestExecutionResults(id) - Results are now included in the execution response
 
 export async function updateLoadTestExecution(id: string, data: Partial<LoadTestExecution>): Promise<LoadTestExecution> {
   return fetchAPI<LoadTestExecution>(`/loadtestsexecutions/${id}`, {
@@ -385,4 +352,16 @@ export async function downloadLoadTestExecution(id: string): Promise<{ filename:
     filename,
     instructions: jsonData.instructions
   };
+}
+
+export async function getExecutionRequestMetrics(executionId: string): Promise<{ count: number; metrics: RequestMetric[] }> {
+  return fetchAPI(`/loadtestsexecutions/${executionId}/metrics`, { 
+    requireAuth: true 
+  });
+}
+
+export async function getTestResultRequestMetrics(executionId: string, testResultId: string): Promise<{ count: number; metrics: RequestMetric[] }> {
+  return fetchAPI(`/loadtestsexecutions/${executionId}/metrics/${testResultId}/requests`, { 
+    requireAuth: true 
+  });
 }

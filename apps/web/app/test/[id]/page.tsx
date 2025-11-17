@@ -15,19 +15,27 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { getTestResult } from '@/lib/api';
-import { TestResult } from '@apimetrics/shared';
+import { getTestResult, getExecutionRequestMetrics } from '@/lib/api';
+import { TestResult, RequestMetric } from '@apimetrics/shared';
 import { formatTimestamp, formatPercentage } from '@apimetrics/shared';
+import { useState } from 'react';
 
 export default function TestDetailPage() {
   const params = useParams();
   const router = useRouter();
   const testId = params.id as string;
+  const [showRequestMetrics, setShowRequestMetrics] = useState(false);
 
   const { data: result, isLoading, error } = useQuery<TestResult>({
     queryKey: ['testResult', testId],
     queryFn: () => getTestResult(testId),
     enabled: !!testId,
+  });
+
+  const { data: metricsData, isLoading: metricsLoading } = useQuery({
+    queryKey: ['requestMetrics', testId],
+    queryFn: () => getExecutionRequestMetrics(testId),
+    enabled: !!testId && showRequestMetrics,
   });
 
   if (isLoading) {
@@ -44,8 +52,8 @@ export default function TestDetailPage() {
         <div className="text-red-600">
           Error loading test result: {error instanceof Error ? error.message : 'Test not found'}
         </div>
-        <Link href="/dashboard" className="ml-4 text-indigo-600 hover:text-indigo-800">
-          Back to Dashboard
+        <Link href="/loadtestsexecutions" className="ml-4 text-indigo-600 hover:text-indigo-800">
+          Back to Executions
         </Link>
       </div>
     );
@@ -85,8 +93,8 @@ export default function TestDetailPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center space-x-4">
-              <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
-                ← Back to Dashboard
+              <Link href="/loadtestsexecutions" className="text-gray-600 hover:text-gray-900">
+                ← Back to Executions
               </Link>
               <h1 className="text-2xl font-bold text-gray-900">ApiMetrics</h1>
             </div>
@@ -278,6 +286,79 @@ export default function TestDetailPage() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+          </div>
+
+          {/* Per-Request Metrics */}
+          <div className="bg-white shadow rounded-lg p-6 mt-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Per-Request Metrics</h3>
+              <button
+                onClick={() => setShowRequestMetrics(!showRequestMetrics)}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm"
+              >
+                {showRequestMetrics ? 'Hide' : 'Show'} Details
+              </button>
+            </div>
+
+            {showRequestMetrics && (
+              <>
+                {metricsLoading ? (
+                  <div className="text-center text-gray-500 py-8">Loading request metrics...</div>
+                ) : metricsData && metricsData.metrics && metricsData.metrics.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status Code</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Latency (ms)</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bytes In</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bytes Out</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Error</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {metricsData.metrics.slice(0, 50).map((metric: RequestMetric, idx: number) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {new Date(metric.timestamp).toLocaleTimeString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <span className={`px-2 py-1 rounded-full text-white text-xs font-medium ${
+                                metric.statusCode >= 200 && metric.statusCode < 300 ? 'bg-green-500' :
+                                metric.statusCode >= 400 && metric.statusCode < 500 ? 'bg-yellow-500' :
+                                metric.statusCode >= 500 ? 'bg-red-500' : 'bg-gray-500'
+                              }`}>
+                                {metric.statusCode}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {(metric.latency / 1000000).toFixed(2)}ms
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {metric.bytesIn}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {metric.bytesOut}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                              {metric.error ? metric.error : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {metricsData.metrics.length > 50 && (
+                      <p className="mt-4 text-sm text-gray-500 text-center">
+                        Showing first 50 of {metricsData.count} requests
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">No request metrics available</div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </main>

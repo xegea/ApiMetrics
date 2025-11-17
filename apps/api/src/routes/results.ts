@@ -26,6 +26,15 @@ interface PostResultsBody {
   bytesOut?: number;
   statusCodes?: Record<string, number>;
   errors?: string[];
+  // Per-request metrics
+  requestMetrics?: Array<{
+    timestamp: string;
+    latency: number;
+    statusCode: number;
+    bytesIn: number;
+    bytesOut: number;
+    error?: string;
+  }>;
 }
 
 interface GetResultsParams {
@@ -119,6 +128,32 @@ async function postResults(
       },
     });
 
+    // Store individual request metrics if provided
+    if (result.requestMetrics && Array.isArray(result.requestMetrics) && result.requestMetrics.length > 0) {
+      console.log(`Storing ${result.requestMetrics.length} request metrics for test result ${testResult.id}`);
+      
+      try {
+        const requestMetricsData = result.requestMetrics.map((metric) => ({
+          testResultId: testResult.id,
+          timestamp: new Date(metric.timestamp),
+          latency: metric.latency,
+          statusCode: metric.statusCode,
+          bytesIn: metric.bytesIn,
+          bytesOut: metric.bytesOut,
+          error: metric.error || null,
+        }));
+
+        await (prisma as any).requestMetric.createMany({
+          data: requestMetricsData,
+        });
+
+        console.log(`Successfully stored ${requestMetricsData.length} request metrics`);
+      } catch (metricsError) {
+        console.error('Error storing request metrics:', metricsError instanceof Error ? metricsError.message : String(metricsError));
+        // Don't fail the entire request if metrics storage fails
+      }
+    }
+
     // Also update the LoadTestExecution with the latest metrics for quick access
     await (prisma.loadTestExecution as any).update({
       where: { id: result.executionId },
@@ -147,6 +182,7 @@ async function postResults(
     return reply.code(201).send({
       id: testResult.id,
       message: 'Test result saved successfully',
+      requestMetricsCount: result.requestMetrics?.length || 0,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -195,7 +231,7 @@ async function getResults(
       return reply.code(404).send({ error: 'Test result not found' });
     }
 
-    // Return in the format expected by the dashboard
+  // Return in the format expected by Test Executions (legacy compatibility)
     return reply.send({
       id: execution.id,
       avgLatency: execution.avgLatency,

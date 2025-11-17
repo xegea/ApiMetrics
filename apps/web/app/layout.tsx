@@ -8,7 +8,7 @@ import { TopBar } from './components/TopBar';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'ApiMetrics Dashboard',
+  title: 'ApiMetrics',
   description: 'Load testing metrics and analytics',
 };
 

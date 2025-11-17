@@ -7,7 +7,6 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import HomeIcon from '@mui/icons-material/Home';
 import FolderIcon from '@mui/icons-material/Folder';
-import BarChartIcon from '@mui/icons-material/BarChart';
 import BoltIcon from '@mui/icons-material/Bolt';
 
 interface MenuItem {
@@ -20,7 +19,6 @@ interface MenuItem {
 const iconMap = {
   home: HomeIcon,
   folder: FolderIcon,
-  barChart: BarChartIcon,
   bolt: BoltIcon,
 };
 
@@ -38,13 +36,6 @@ const menuItems: MenuItem[] = [
       { label: 'Load Tests Executions', href: '/loadtestsexecutions' },
     ],
   },
-  {
-    label: 'Metrics',
-    icon: 'barChart',
-    children: [
-      { label: 'Dashboard', href: '/dashboard' },
-    ],
-  },
 ];
 
 export function Sidebar() {
@@ -60,9 +51,9 @@ export function Sidebar() {
   // Initialize expanded sections with Load Tests expanded by default and when a child is active
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     () => {
-      const initial = new Set(['Load Tests', 'Metrics']);
+      const initial = new Set(['Load Tests']);
       // Auto-expand Load Tests if any of its children are active
-      const loadTestsActive = menuItems
+  const loadTestsActive = menuItems
         .find(item => item.label === 'Load Tests')
         ?.children?.some(child => pathname === child.href);
       if (loadTestsActive) {

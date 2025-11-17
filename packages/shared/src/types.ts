@@ -34,6 +34,44 @@ export interface TestResult {
 }
 
 /**
+ * Individual request metric from a load test
+ */
+export interface RequestMetric {
+  id: string;
+  testResultId: string;
+  timestamp: string;
+  latency: number; // in nanoseconds
+  statusCode: number;
+  bytesIn: number;
+  bytesOut: number;
+  error?: string;
+  createdAt: string;
+}
+
+/**
+ * Request summary metrics aggregated by request (per target) for a single test result
+ */
+export interface RequestMetricSummary {
+  id: string;
+  testResultId: string;
+  requestIndex: number;
+  method: string;
+  target: string;
+  totalRequests: number;
+  avgLatency: string; // nanoseconds encoded as string to support bigints from database
+  minLatency: string;
+  maxLatency: string;
+  p50Latency: string;
+  p95Latency: string;
+  p99Latency: string;
+  successRate: number; // 0-1
+  bytesIn: number;
+  bytesOut: number;
+  statusCodes: Record<string, number>;
+  errors: string[];
+}
+
+/**
  * A test request within an execution plan
  */
 export interface TestRequest {
@@ -93,6 +131,7 @@ export interface Execution {
   bytesOut?: number; // Total bytes sent
   statusCodes?: Record<string, number>; // Status code counts
   errorDetails?: string[]; // Error details
+  requestMetricSummaries?: RequestMetricSummary[];
 }
 
 /**

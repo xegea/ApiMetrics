@@ -79,25 +79,11 @@ export function TopBar() {
                   <p className="text-sm font-medium text-gray-900 truncate">{user.email}</p>
                 </div>
                 <Link
-                  href="/dashboard"
+                  href="/profile"
                   className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   onClick={() => setShowUserMenu(false)}
                 >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/load-tests"
-                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  onClick={() => setShowUserMenu(false)}
-                >
-                  Load Tests
-                </Link>
-                <Link
-                  href="/endpoints"
-                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  onClick={() => setShowUserMenu(false)}
-                >
-                  Endpoints
+                  Profile
                 </Link>
                 <hr className="my-2 border-gray-200" />
                 <button

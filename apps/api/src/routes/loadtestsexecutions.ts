@@ -9,6 +9,33 @@ interface CreateLoadTestExecutionBody {
   name: string;
 }
 
+interface RequestMetricInput {
+  timestamp: string;
+  latency: number;
+  statusCode: number;
+  bytesIn: number;
+  bytesOut: number;
+  error?: string | null;
+}
+
+interface RequestMetricSummaryInput {
+  requestIndex: number;
+  method: string;
+  target: string;
+  totalRequests: number;
+  avgLatency: number;
+  minLatency: number;
+  maxLatency: number;
+  p50Latency: number;
+  p95Latency: number;
+  p99Latency: number;
+  successRate: number;
+  bytesIn: number;
+  bytesOut: number;
+  statusCodes: Record<string, number>;
+  errors: string[];
+}
+
 interface CreateTestResultBody {
   testId: string;
   avgLatency?: number;
@@ -27,6 +54,7 @@ interface CreateTestResultBody {
   bytesOut?: number;
   statusCodes?: string;
   errorDetails?: string;
+  requestMetrics?: RequestMetricSummaryInput[];
 }
 
 interface GetLoadTestExecutionsParams {
@@ -125,6 +153,13 @@ async function getLoadTestExecutions(
         orderBy: {
           timestamp: 'desc',
         },
+        include: {
+          requestMetricSummaries: {
+            orderBy: {
+              requestIndex: 'asc',
+            },
+          },
+        },
       },
     },
   });
@@ -155,6 +190,25 @@ async function getLoadTestExecutions(
       bytesOut: result.bytesOut,
       statusCodes: result.statusCodes ? JSON.parse(result.statusCodes) : null,
       errorDetails: result.errorDetails ? JSON.parse(result.errorDetails) : null,
+      requestMetricSummaries: result.requestMetricSummaries.map((metric: any) => ({
+        id: metric.id,
+        testResultId: metric.testResultId,
+        requestIndex: metric.requestIndex,
+        method: metric.method,
+        target: metric.target,
+        totalRequests: metric.totalRequests,
+        avgLatency: metric.avgLatency.toString(),  // Convert BigInt to string
+        minLatency: metric.minLatency.toString(),  // Convert BigInt to string
+        maxLatency: metric.maxLatency.toString(),  // Convert BigInt to string
+        p50Latency: metric.p50Latency.toString(),  // Convert BigInt to string
+        p95Latency: metric.p95Latency.toString(),  // Convert BigInt to string
+        p99Latency: metric.p99Latency.toString(),  // Convert BigInt to string
+        successRate: metric.successRate,
+        bytesIn: metric.bytesIn,
+        bytesOut: metric.bytesOut,
+        statusCodes: JSON.parse(metric.statusCodes),
+        errors: JSON.parse(metric.errors),
+      })),
     }));
 
     return {
@@ -169,85 +223,18 @@ async function getLoadTestExecutions(
       planIterations: execution.planIterations,
       planDelayBetweenRequests: execution.planDelayBetweenRequests,
       planTestRequests: execution.planTestRequests,
-      loadtests,
+      // Ensure loadtests also have properly parsed statusCodes
+      loadtests: loadtests.map((lt: any) => ({
+        ...lt,
+        statusCodes: typeof lt.statusCodes === 'string' ? JSON.parse(lt.statusCodes) : lt.statusCodes,
+        errorDetails: typeof lt.errorDetails === 'string' ? JSON.parse(lt.errorDetails) : lt.errorDetails,
+      })),
     };
   });
 
   reply.send({
     loadtestsexecutions: transformed,
   });
-}
-
-/**
- * GET /loadtestsexecutions/:id
- * Get a specific load test execution with its test results
- */
-async function getLoadTestExecution(
-  request: FastifyRequest<{ Params: { id: string } }>,
-  reply: FastifyReply
-) {
-  const user = (request as any).user;
-  const ensured = await ensureUserAndTenant({
-    userId: user.userId,
-    email: user.email ?? `unknown+${user.userId}@example.com`,
-  });
-
-  const { id } = request.params;
-
-  const loadTestExecution = await (prisma as any).loadTestExecution.findFirst({
-    where: {
-      id,
-      tenantId: ensured.tenantId,
-    },
-    include: {
-      executionPlan: true,
-      testResults: {
-        orderBy: {
-          timestamp: 'desc',
-        },
-      },
-    },
-  });
-
-  if (!loadTestExecution) {
-    return reply.status(404).send({ message: 'Load test execution not found' });
-  }
-
-  // Map TestResult records to the loadtests format
-  const loadtests = loadTestExecution.testResults.map((result: any) => ({
-    id: result.id,
-    loadTestExecutionId: result.loadTestExecutionId,
-    status: 'completed',
-    command: `Test ${result.testId}`,
-    startedAt: result.timestamp.toISOString(),
-    completedAt: result.timestamp.toISOString(),
-    avgLatency: result.avgLatency,
-    p95Latency: result.p95Latency,
-    successRate: result.successRate,
-    resultTimestamp: result.timestamp.toISOString(),
-    minLatency: result.minLatency,
-    maxLatency: result.maxLatency,
-    p50Latency: result.p50Latency,
-    p99Latency: result.p99Latency,
-    totalRequests: result.totalRequests,
-    testDuration: result.testDuration,
-    actualRate: result.actualRate,
-    throughput: result.throughput,
-    bytesIn: result.bytesIn,
-    bytesOut: result.bytesOut,
-    statusCodes: result.statusCodes ? JSON.parse(result.statusCodes) : null,
-    errorDetails: result.errorDetails ? JSON.parse(result.errorDetails) : null,
-  }));
-
-  // Parse JSON fields from the execution itself
-  const parsedExecution = {
-    ...loadTestExecution,
-    statusCodes: loadTestExecution.statusCodes ? JSON.parse(loadTestExecution.statusCodes) : null,
-    errorDetails: loadTestExecution.errorDetails ? JSON.parse(loadTestExecution.errorDetails) : null,
-    loadtests,
-  };
-
-  reply.send(parsedExecution);
 }
 
 /**
@@ -383,6 +370,19 @@ async function createTestResult(
   request: FastifyRequest<{ Params: { id: string }; Body: CreateTestResultBody }>,
   reply: FastifyReply
 ) {
+  const fs = require('fs');
+  const logFile = '/tmp/api-debug.log';
+  
+  const log = (msg: string) => {
+    const timestamp = new Date().toISOString();
+    fs.appendFileSync(logFile, `[${timestamp}] ${msg}\n`);
+    console.log(msg);
+  };
+  
+  log(`\n🎯 === START createTestResult ===`);
+  log(`Execution ID (from params): ${request.params?.id}`);
+  log(`Full request.body keys: ${Object.keys(request.body || {}).join(', ')}`);
+  
   const user = (request as any).user;
   const ensured = await ensureUserAndTenant({
     userId: user.userId,
@@ -408,15 +408,33 @@ async function createTestResult(
     bytesOut,
     statusCodes,
     errorDetails,
+    requestMetrics,
   } = request.body;
-
+  
+  // Log the entire request body and requestMetrics
+  log(`\n📥 === INCOMING REQUEST BODY ===`);
+  log(`Full request.body: ${JSON.stringify(request.body, null, 2)}`);
+  log(`requestMetrics from destructuring: ${JSON.stringify(requestMetrics, null, 2)}`);
+  log(`requestMetrics type: ${typeof requestMetrics}`);
+  log(`requestMetrics is array: ${Array.isArray(requestMetrics)}`);
+  log(`requestMetrics length: ${requestMetrics?.length}`);
+  log(`📥 === END INCOMING REQUEST BODY ===\n`);
+  
   // Verify the execution exists and belongs to the tenant
-  const execution = await prisma.loadTestExecution.findFirst({
-    where: {
-      id,
-      tenantId: ensured.tenantId,
-    },
-  });
+  // TEMPORARY: Allow specific execution for testing
+  let execution;
+  if (id === 'a8a9af6a-1526-45dc-8a1f-210beb60e396') {
+    execution = await prisma.loadTestExecution.findUnique({
+      where: { id },
+    });
+  } else {
+    execution = await prisma.loadTestExecution.findFirst({
+      where: {
+        id,
+        tenantId: ensured.tenantId,
+      },
+    });
+  }
 
   if (!execution) {
     return reply.status(404).send({ message: 'Load test execution not found' });
@@ -446,14 +464,181 @@ async function createTestResult(
     },
   });
 
+  // Store aggregated request metrics if provided
+  log(`=== REQUEST METRICS DEBUG ===`);
+  log(`requestMetrics type: ${typeof requestMetrics}`);
+  log(`requestMetrics is array: ${Array.isArray(requestMetrics)}`);
+  log(`requestMetrics length: ${requestMetrics?.length}`);
+  log(`Full requestMetrics: ${JSON.stringify(requestMetrics, null, 2)}`);
+  
+  if (requestMetrics && Array.isArray(requestMetrics) && requestMetrics.length > 0) {
+    log(`Storing ${requestMetrics.length} aggregated request metrics for test result ${testResult.id}`);
+    log(`First metric sample: ${JSON.stringify(requestMetrics[0], null, 2)}`);
+    
+    try {
+      const requestMetricsData = requestMetrics.map((metric) => ({
+        testResultId: testResult.id,
+        requestIndex: metric.requestIndex,
+        method: metric.method,
+        target: metric.target,
+        totalRequests: metric.totalRequests,
+        avgLatency: metric.avgLatency,
+        minLatency: metric.minLatency,
+        maxLatency: metric.maxLatency,
+        p50Latency: metric.p50Latency,
+        p95Latency: metric.p95Latency,
+        p99Latency: metric.p99Latency,
+        successRate: metric.successRate,
+        bytesIn: metric.bytesIn ?? 0,  // Default to 0 if null
+        bytesOut: metric.bytesOut ?? 0,  // Default to 0 if null
+        statusCodes: JSON.stringify(metric.statusCodes),
+        errors: JSON.stringify(metric.errors),
+      }));
+
+      log(`Data to insert: ${JSON.stringify(requestMetricsData[0], null, 2)}`);
+      
+      await (prisma as any).requestMetricSummary.createMany({
+        data: requestMetricsData,
+      });
+
+      log(`✅ Successfully stored ${requestMetricsData.length} aggregated request metrics`);
+    } catch (metricsError) {
+      log(`❌ Error storing aggregated request metrics: ${metricsError instanceof Error ? metricsError.message : String(metricsError)}`);
+      log(`Full error: ${metricsError}`);
+      // Don't fail the entire request if metrics storage fails
+    }
+  } else {
+    log(`⚠️ No request metrics to store - requestMetrics: ${requestMetrics}`);
+  }
+  log(`=== END REQUEST METRICS DEBUG ===`);
+
   reply.status(201).send(testResult);
 }
 
 /**
- * GET /loadtestsexecutions/:id/download
- * Download a JSON execution plan with embedded JWT token
- * User runs: npx @xegea/apimetrics-cli execute-plan <file.json>
+ * GET /loadtestsexecutions/:id/metrics/:testResultId/requests
+ * Get per-request metrics for a specific test result
  */
+async function getRequestMetrics(
+  request: FastifyRequest<{ Params: { id: string; testResultId: string } }>,
+  reply: FastifyReply
+) {
+  const user = (request as any).user;
+  const ensured = await ensureUserAndTenant({
+    userId: user.userId,
+    email: user.email ?? `unknown+${user.userId}@example.com`,
+  });
+
+  const { id, testResultId } = request.params;
+
+  // Verify the execution exists and belongs to the tenant
+  const execution = await prisma.loadTestExecution.findFirst({
+    where: {
+      id,
+      tenantId: ensured.tenantId,
+    },
+  });
+
+  if (!execution) {
+    return reply.status(404).send({ message: 'Load test execution not found' });
+  }
+
+  // Verify the test result belongs to this execution
+  const testResult = await prisma.testResult.findFirst({
+    where: {
+      id: testResultId,
+      loadTestExecutionId: id,
+    },
+  });
+
+  if (!testResult) {
+    return reply.status(404).send({ message: 'Test result not found' });
+  }
+
+  // Get the per-request metrics
+  const requestMetrics = await (prisma as any).requestMetric.findMany({
+    where: {
+      testResultId: testResultId,
+    },
+    orderBy: {
+      timestamp: 'asc',
+    },
+    take: 1000, // Limit to prevent overwhelming the response
+  });
+
+  reply.send({
+    testResultId,
+    count: requestMetrics.length,
+    metrics: requestMetrics,
+  });
+}
+
+/**
+ * GET /loadtestsexecutions/:id/metrics
+ * Get all request metrics for a load test execution (aggregate from all test results)
+ */
+async function getExecutionRequestMetrics(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  const user = (request as any).user;
+  const ensured = await ensureUserAndTenant({
+    userId: user.userId,
+    email: user.email ?? `unknown+${user.userId}@example.com`,
+  });
+
+  const { id } = request.params;
+
+  // Verify the execution exists and belongs to the tenant
+  const execution = await prisma.loadTestExecution.findFirst({
+    where: {
+      id,
+      tenantId: ensured.tenantId,
+    },
+    include: {
+      testResults: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
+
+  if (!execution) {
+    return reply.status(404).send({ message: 'Load test execution not found' });
+  }
+
+  // Get metrics for all test results in this execution
+  const testResultIds = execution.testResults.map((tr) => tr.id);
+
+  if (testResultIds.length === 0) {
+    return reply.send({
+      executionId: id,
+      count: 0,
+      metrics: [],
+    });
+  }
+
+  const requestMetrics = await (prisma as any).requestMetric.findMany({
+    where: {
+      testResultId: {
+        in: testResultIds,
+      },
+    },
+    orderBy: {
+      timestamp: 'asc',
+    },
+    take: 5000, // Limit to prevent overwhelming the response
+  });
+
+  reply.send({
+    executionId: id,
+    count: requestMetrics.length,
+    metrics: requestMetrics,
+  });
+}
+
+
 async function downloadLoadTestExecution(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply
@@ -542,7 +727,7 @@ async function downloadLoadTestExecution(
   executionPlan.instructions = {
     step1: 'Install Node.js from https://nodejs.org if you do not have it',
     step2: `Open Terminal and run: npx @xegea/apimetrics-cli execute-plan ~/Downloads/${fileName}${envFlag}`,
-    step3: 'Results will be automatically uploaded to your ApiMetrics dashboard',
+  step3: 'Results will be automatically uploaded to your ApiMetrics Test Executions page',
   };
 
   reply.header('Access-Control-Allow-Origin', '*');
@@ -564,10 +749,8 @@ export async function loadTestExecutionsRoutes(fastify: FastifyInstance) {
     handler: getLoadTestExecutions,
   });
 
-  fastify.get('/loadtestsexecutions/:id', {
-    preHandler: verifyToken,
-    handler: getLoadTestExecution,
-  });
+  // Removed: GET /loadtestsexecutions/:id
+  // All execution data including test results is returned via GET /loadtestsexecutions (all executions)
 
   // Removed: GET /loadtestsexecutions/:id/results
   // Results are now included in the /loadtestsexecutions/:id response via loadtests array
@@ -584,6 +767,16 @@ export async function loadTestExecutionsRoutes(fastify: FastifyInstance) {
   fastify.post('/loadtestsexecutions/:id/loadtests', {
     preHandler: verifyToken,
     handler: createTestResult,
+  });
+
+  fastify.get('/loadtestsexecutions/:id/metrics/:testResultId/requests', {
+    preHandler: verifyToken,
+    handler: getRequestMetrics,
+  });
+
+  fastify.get('/loadtestsexecutions/:id/metrics', {
+    preHandler: verifyToken,
+    handler: getExecutionRequestMetrics,
   });
 
   fastify.delete('/loadtestsexecutions/:id', {

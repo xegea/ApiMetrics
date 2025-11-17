@@ -30,6 +30,25 @@ interface Execution {
   bytesOut?: number; // Total bytes sent
   statusCodes?: Record<string, number>; // Status code counts
   errorDetails?: string[]; // Error details
+  requestMetricSummaries?: Array<{
+    id: string;
+    testResultId: string;
+    requestIndex: number;
+    method: string;
+    target: string;
+    totalRequests: number;
+    avgLatency: string; // string form (bigint) from the API
+    minLatency: string;
+    maxLatency: string;
+    p50Latency: string;
+    p95Latency: string;
+    p99Latency: string;
+    successRate: number;
+    bytesIn: number;
+    bytesOut: number;
+    statusCodes: Record<string, number>;
+    errors: string[];
+  }>;
 }
 
 interface LoadTestExecution {
@@ -48,6 +67,30 @@ interface LoadTestExecution {
 
 interface LoadTestExecutionWithExecutions extends LoadTestExecution {
   loadtests: Execution[];
+}
+
+// Helper to compute total/success/error counts for a RequestMetric summary
+function getRequestStatusCounts(r: any) {
+  const totalFromCounts = r.statusCodes ? Object.values(r.statusCodes).reduce((a: number, b: any) => a + Number(b), 0) : 0;
+  const totalRequests = r.totalRequests ?? totalFromCounts ?? 0;
+
+  // Count successes (2xx) from statusCodes if available
+  let successFromStatus = 0;
+  if (r.statusCodes) {
+    for (const [code, cnt] of Object.entries(r.statusCodes)) {
+      const c = Number(code);
+      if (!Number.isNaN(c) && c >= 200 && c < 300) {
+        successFromStatus += Number(cnt);
+      }
+    }
+  }
+
+  const successCount = successFromStatus || Math.round((r.successRate || 0) * totalRequests);
+  const errorsCount = Math.max(0, totalRequests - successCount);
+
+  const successRate = totalRequests > 0 ? successCount / totalRequests : (typeof r.successRate === 'number' ? r.successRate : 0);
+
+  return { totalRequests, successCount, errorsCount, successRate };
 }
 import { useAuth } from '@/lib/auth';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -82,6 +125,14 @@ function LoadTestResultCard({ loadtest, index, isExpanded, onToggle, onDelete }:
     return `${(nanoseconds / 1000000).toFixed(2)}ms`;
   };
 
+  const formatLatencyFromString = (nanosecondsStr?: string) => {
+    if (!nanosecondsStr) return 'N/A';
+    // nanoseconds come as strings (BigInt from DB); parse as number safely
+    const n = Number(nanosecondsStr);
+    if (Number.isNaN(n)) return 'N/A';
+    return `${(n / 1000000).toFixed(2)}ms`;
+  };
+
   const formatBytes = (bytes?: number) => {
     if (!bytes) return 'N/A';
     if (bytes < 1024) return `${bytes}B`;
@@ -110,6 +161,27 @@ function LoadTestResultCard({ loadtest, index, isExpanded, onToggle, onDelete }:
         return 'bg-blue-100 text-blue-800';
     }
   };
+
+  // Build request summary rows to avoid JSX parser issues
+  const requestRows = (loadtest.requestMetricSummaries || []).map((r) => {
+    const { totalRequests: rTotal, successCount: rSuccessCount, errorsCount: rErrorsCount, successRate: rSuccessRate } = getRequestStatusCounts(r);
+    return (
+      <tr key={r.id} className="border-t">
+        <td className="px-3 py-2">{r.requestIndex + 1}</td>
+        <td className="px-3 py-2 font-medium text-gray-800">{r.method}</td>
+        <td className="px-3 py-2 break-all text-blue-700">{r.target}</td>
+        <td className="px-3 py-2 text-right text-gray-800">{rTotal}</td>
+        <td className="px-3 py-2 text-right">{formatLatencyFromString(r.avgLatency)}</td>
+        <td className="px-3 py-2 text-right">{formatLatencyFromString(r.minLatency)}</td>
+        <td className="px-3 py-2 text-right">{formatLatencyFromString(r.maxLatency)}</td>
+        <td className="px-3 py-2 text-right">{formatLatencyFromString(r.p50Latency)}</td>
+        <td className="px-3 py-2 text-right">{formatLatencyFromString(r.p95Latency)}</td>
+        <td className="px-3 py-2 text-right">{formatLatencyFromString(r.p99Latency)}</td>
+        <td className="px-3 py-2 text-right">{typeof r.successRate === 'number' ? (r.successRate * 100).toFixed(1) + '%' : (rTotal > 0 ? (rSuccessRate * 100).toFixed(1) + '%' : 'N/A')}</td>
+        <td className="px-3 py-2 text-right">{rErrorsCount}</td>
+      </tr>
+    );
+  });
 
   return (
     <div className={`border rounded-lg ${getStatusColor(loadtest.status)} group relative`}>
@@ -143,6 +215,7 @@ function LoadTestResultCard({ loadtest, index, isExpanded, onToggle, onDelete }:
             </div>
           </div>
         </div>
+                  {/* requests summary insertion point */}
         <button 
           onClick={(e) => { e.stopPropagation(); onDelete(); }} 
           className="p-1 rounded text-gray-600 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity" 
@@ -290,6 +363,36 @@ function LoadTestResultCard({ loadtest, index, isExpanded, onToggle, onDelete }:
               </div>
             </div>
           )}
+
+          {/* Request Summaries for this test */}
+          {loadtest.requestMetricSummaries && loadtest.requestMetricSummaries.length > 0 && (
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">Requests Summary</h3>
+              <div className="overflow-x-auto border rounded-lg">
+                <table className="min-w-full text-sm text-gray-800">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left">#</th>
+                      <th className="px-3 py-2 text-left">Method</th>
+                      <th className="px-3 py-2 text-left">Endpoint</th>
+                      <th className="px-3 py-2 text-right">Requests</th>
+                      <th className="px-3 py-2 text-right">Avg</th>
+                      <th className="px-3 py-2 text-right">Min</th>
+                      <th className="px-3 py-2 text-right">Max</th>
+                      <th className="px-3 py-2 text-right">P50</th>
+                      <th className="px-3 py-2 text-right">P95</th>
+                      <th className="px-3 py-2 text-right">P99</th>
+                      <th className="px-3 py-2 text-right">Success</th>
+                      <th className="px-3 py-2 text-right">Errors</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {requestRows}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -371,6 +474,13 @@ function LoadTestsExecutionsPage() {
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
     return date.toISOString().replace('T', ' ').split('.')[0];
+  };
+
+  const formatLatencyFromString = (nanosecondsStr?: string) => {
+    if (!nanosecondsStr) return 'N/A';
+    const n = Number(nanosecondsStr);
+    if (Number.isNaN(n)) return 'N/A';
+    return `${(n / 1000000).toFixed(2)}ms`;
   };
 
   const openCommandModal = (executionName: string, filename?: string, instructions?: any) => {
@@ -522,12 +632,70 @@ function LoadTestsExecutionsPage() {
                         new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
                       );
                       
-                      const totalRequests = execution.loadtests.reduce((sum, t) => sum + (t.totalRequests || 0), 0);
-                      const totalErrors = execution.loadtests.reduce((sum, t) => {
-                        const errors = (t.totalRequests || 0) - Math.round((t.totalRequests || 0) * (t.successRate || 0));
-                        return sum + errors;
-                      }, 0);
+                      // Derive per-test totals from request summaries as fallback so the Legend matches the bars
+                      const loadtestsWithTotals = sortedLoadtests.map((t) => {
+                        const fallbackTotal = (t.requestMetricSummaries || []).reduce((acc, r) => acc + (r.totalRequests || 0), 0);
+                        const computedTotal = (t.totalRequests ?? 0) || fallbackTotal;
+
+                        let computedSuccessRate = 0;
+                        if (typeof t.successRate === 'number') computedSuccessRate = t.successRate;
+                        else if (t.statusCodes && Object.keys(t.statusCodes).length > 0) {
+                          const totalFromStatus = Object.values(t.statusCodes).reduce((a: number, b: any) => a + Number(b), 0);
+                          const okFromStatus = Object.entries(t.statusCodes).reduce((a, [code, cnt]) => {
+                            const c = Number(code);
+                            if (c >= 200 && c < 300) return a + Number(cnt);
+                            return a;
+                          }, 0);
+                          computedSuccessRate = totalFromStatus > 0 ? okFromStatus / totalFromStatus : 0;
+                        }
+
+                        const errorCount = computedTotal - Math.round(computedTotal * computedSuccessRate);
+                        const successCount = computedTotal - errorCount;
+                        return { ...t, computedTotalRequests: computedTotal, computedErrorCount: errorCount, computedSuccessCount: successCount } as any;
+                      });
+
+                      const totalRequests = loadtestsWithTotals.reduce((sum, t) => sum + (t.computedTotalRequests || 0), 0);
+                      const totalErrors = loadtestsWithTotals.reduce((sum, t) => sum + (t.computedErrorCount || 0), 0);
                       const totalSuccess = totalRequests - totalErrors;
+
+                      // Build request summary cards for the latest run (fallback to [] if missing)
+                      const latestSummaryCards = sortedLoadtests.length > 0 ? (sortedLoadtests[sortedLoadtests.length - 1].requestMetricSummaries || []).map((r: any) => {
+                        const { totalRequests: rTotal, successCount: rSuccessCount, errorsCount: rErrorsCount, successRate: rSuccessRate } = getRequestStatusCounts(r);
+                        return (
+                          <div key={r.id} className="bg-white border rounded p-3 text-gray-900">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="text-sm font-semibold text-gray-700">{r.method}</div>
+                                <div className="text-sm text-blue-600 break-all">{r.target}</div>
+                              </div>
+                              <div className="text-sm text-gray-600 font-medium">{rTotal} requests</div>
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <div className="text-gray-500">Avg</div>
+                                <div className="font-medium text-gray-800">{formatLatencyFromString(r.avgLatency)}</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-500">Success</div>
+                                <div className="font-medium text-gray-800">{typeof r.successRate === 'number' ? (r.successRate * 100).toFixed(1) + '%' : (rTotal > 0 ? (rSuccessRate * 100).toFixed(1) + '%' : 'N/A')}</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-500">Min</div>
+                                <div className="font-medium text-gray-800">{formatLatencyFromString(r.minLatency)}</div>
+                              </div>
+                              <div>
+                                <div className="text-gray-500">Max</div>
+                                <div className="font-medium text-gray-800">{formatLatencyFromString(r.maxLatency)}</div>
+                              </div>
+                            </div>
+
+                            {rErrorsCount > 0 && (
+                              <div className="mt-3 bg-red-50 border border-red-200 rounded p-2 text-sm text-red-800">Errors: {rErrorsCount}{r.errors && r.errors.length > 0 ? ` — ${r.errors.join('; ')}` : ''}</div>
+                            )}
+                          </div>
+                        );
+                      }) : [];
                       
                       return (
                       <div className="mb-6 bg-gradient-to-br from-slate-50 to-blue-50 border border-slate-200 rounded-xl p-6 shadow-lg">
@@ -561,7 +729,8 @@ function LoadTestsExecutionsPage() {
                           <div className="relative" style={{ height: '200px' }}>
                             {/* Calculate max values */}
                             {(() => {
-                              const maxRequests = Math.max(...sortedLoadtests.map(t => t.totalRequests || 0));
+                              // loadtestsWithTotals already computed above to match the legend; use it here
+                              const maxRequests = Math.max(...loadtestsWithTotals.map(t => t.computedTotalRequests || 0));
                               const maxValue = maxRequests;
                               const ySteps = 5;
                               const stepValue = maxValue / ySteps;
@@ -594,9 +763,9 @@ function LoadTestsExecutionsPage() {
 
                                   {/* Graph area - Bars */}
                                   <div className="absolute left-20 right-0 top-0 bottom-12 flex items-end justify-around gap-3 px-6" style={{ height: 'calc(100% - 48px)' }}>
-                                    {sortedLoadtests.map((loadtest, index) => {
-                                      const errorCount = (loadtest.totalRequests || 0) - Math.round((loadtest.totalRequests || 0) * (loadtest.successRate || 0));
-                                      const successCount = (loadtest.totalRequests || 0) - errorCount;
+                                    {loadtestsWithTotals.map((loadtest, index) => {
+                                      const errorCount = loadtest.computedErrorCount || 0;
+                                      const successCount = loadtest.computedSuccessCount || 0;
                                       
                                       // Calculate heights as percentage of max value
                                       const successHeightPercent = maxValue > 0 ? (successCount / maxValue) * 100 : 0;
@@ -613,7 +782,7 @@ function LoadTestsExecutionsPage() {
                                             <div className="flex items-center gap-2 mb-1">
                                               <div className="w-2 h-2 bg-blue-500 rounded"></div>
                                               <span className="text-xs text-gray-300">Total:</span>
-                                              <span className="font-bold">{loadtest.totalRequests || 0}</span>
+                                              <span className="font-bold">{loadtest.computedTotalRequests || 0}</span>
                                             </div>
                                             <div className="flex items-center gap-2 mb-1">
                                               <div className="w-2 h-2 bg-green-500 rounded"></div>
@@ -654,7 +823,7 @@ function LoadTestsExecutionsPage() {
 
                                   {/* X-axis labels (Test numbers) */}
                                   <div className="absolute left-20 right-0 bottom-0 flex justify-around items-start h-12 px-6">
-                                    {sortedLoadtests.map((loadtest, index) => (
+                                    {loadtestsWithTotals.map((loadtest, index) => (
                                       <div key={loadtest.id} className="flex-1 flex flex-col items-center max-w-[70px]">
                                         <div className="text-sm font-bold text-gray-800 bg-white px-2 py-1 rounded-md shadow-sm">#{index + 1}</div>
                                         <div className="text-xs text-gray-500 mt-1">{new Date(loadtest.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
@@ -666,6 +835,16 @@ function LoadTestsExecutionsPage() {
                             })()}
                           </div>
                         </div>
+
+                        {/* Requests Summary for the most recent test (under the graph) */}
+                        {sortedLoadtests.length > 0 && sortedLoadtests[sortedLoadtests.length - 1].requestMetricSummaries && (
+                          <div className="mt-6">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-3">Requests Summary (Latest)</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {latestSummaryCards}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       );
                     })()}
@@ -778,7 +957,7 @@ function LoadTestsExecutionsPage() {
                   <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-500 text-white font-bold text-sm">3</div>
                   <h3 className="text-lg font-semibold text-gray-800">Results Uploaded</h3>
                 </div>
-                <p className="text-gray-600 ml-10">After tests complete, results are automatically uploaded to your dashboard where you can view metrics and analytics.</p>
+                <p className="text-gray-600 ml-10">After tests complete, results are automatically uploaded to your Test Executions page where you can view metrics and analytics.</p>
               </div>
 
               {/* Important Note */}

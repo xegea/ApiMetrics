@@ -33,7 +33,7 @@ export default function Home() {
     {
       icon: 'analytics',
       title: 'Real-time Metrics',
-      description: 'Monitor latency, throughput, success rates, and error patterns in real-time dashboards.'
+      description: 'Monitor latency, throughput, success rates, and error patterns in real-time test executions.'
     },
     {
       icon: 'build',
@@ -134,10 +134,10 @@ export default function Home() {
               {user ? (
                 <>
                   <Link
-                    href="/endpoints"
+                    href="/loadtestsexecutions"
                     className="px-8 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition shadow-lg hover:shadow-xl"
                   >
-                    Go to Dashboard
+                    Go to Test Executions
                   </Link>
                   <Link
                     href="/load-tests"
@@ -273,10 +273,10 @@ export default function Home() {
             Join thousands of developers who trust ApiMetrics for their load testing needs
           </p>
           <Link
-            href={user ? '/endpoints' : '/login'}
+            href={user ? '/loadtestsexecutions' : '/login'}
             className="inline-block px-8 py-4 bg-white text-blue-600 rounded-lg font-semibold hover:bg-gray-100 transition shadow-lg hover:shadow-xl"
           >
-            {user ? 'Go to Dashboard' : 'Start Testing Now'}
+            {user ? 'Go to Test Executions' : 'Start Testing Now'}
           </Link>
         </div>
       </div>

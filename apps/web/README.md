@@ -5,7 +5,6 @@ Next.js 15 frontend for the ApiMetrics project.
 ## Features
 
 - **Login Page** (`/login`) - User authentication
-- **Dashboard** (`/dashboard`) - List of all test results with basic metrics
 - **Test Detail** (`/test/[id]`) - Detailed view with charts for latency and success rate
 - Built with Next.js 15 App Router
 - Tailwind CSS for styling
@@ -60,7 +59,7 @@ app/
   ├── page.tsx            # Home page (redirects to dashboard)
   ├── login/              # Login page
   │   └── page.tsx
-  ├── dashboard/          # Dashboard with test results list
+  ├── dashboard/          # (removed) Dashboard with test results list
   │   └── page.tsx
   ├── test/[id]/          # Test detail page with charts
   │   └── page.tsx
@@ -76,16 +75,9 @@ lib/
 
 Authentication page with email and password form. Stores JWT token in localStorage.
 
-### Dashboard (`/dashboard`)
+### Dashboard (removed)
 
-Displays a list of all test results with:
-- Test ID
-- Average latency
-- P95 latency
-- Success rate
-- Timestamp
-
-Click on any result to view detailed metrics.
+The dashboard route has been removed from the navigation — test results are still available via the "Test Executions" section.
 
 ### Test Detail (`/test/[id]`)
 

@@ -104,9 +104,59 @@ model TestResult {
   updatedAt       DateTime @updatedAt
 
   loadTestExecution LoadTestExecution @relation("ExecutionToResults", fields: [loadTestExecutionId], references: [id], onDelete: Cascade)
+  requestMetrics    RequestMetric[]   @relation("ResultToRequestMetrics")
+  requestMetricSummaries RequestMetricSummary[] @relation("ResultToRequestMetricSummaries")
 
   @@index([loadTestExecutionId])
   @@map("test_results")
+}
+
+/// Individual request metrics from vegeta attack
+model RequestMetric {
+  id              String   @id @default(uuid())
+  testResultId    String
+  // Per-request metrics from vegeta
+  timestamp       DateTime // When the request was made
+  latency         Int      // Response latency in nanoseconds
+  statusCode      Int      // HTTP status code (e.g., 200, 404, 500)
+  bytesIn         Int      // Bytes received
+  bytesOut        Int      // Bytes sent
+  error           String?  // Error message if the request failed
+  body            String?  @db.Text // Response body (optional, for storage)
+  createdAt       DateTime @default(now())
+
+  testResult      TestResult @relation("ResultToRequestMetrics", fields: [testResultId], references: [id], onDelete: Cascade)
+
+  @@index([testResultId])
+  @@index([testResultId, timestamp])
+  @@map("request_metrics")
+}
+
+/// Aggregated request metrics per request type
+model RequestMetricSummary {
+  id              String   @id @default(uuid())
+  testResultId    String
+  requestIndex    Int      // Index of the request in the execution plan
+  method          String   // HTTP method (GET, POST, etc.)
+  target          String   // Request URL/target
+  totalRequests   Int      // Total requests made for this type
+  avgLatency      BigInt   // Average latency in nanoseconds
+  minLatency      BigInt   // Minimum latency in nanoseconds
+  maxLatency      BigInt   // Maximum latency in nanoseconds
+  p50Latency      BigInt   // P50 latency in nanoseconds
+  p95Latency      BigInt   // P95 latency in nanoseconds
+  p99Latency      BigInt   // P99 latency in nanoseconds
+  successRate     Float    // Success rate (0-1)
+  bytesIn         Int      // Total bytes received
+  bytesOut        Int      // Total bytes sent
+  statusCodes     String   // JSON string of status code counts
+  errors          String   // JSON string of error messages
+  createdAt       DateTime @default(now())
+
+  testResult      TestResult @relation("ResultToRequestMetricSummaries", fields: [testResultId], references: [id], onDelete: Cascade)
+
+  @@index([testResultId])
+  @@map("request_metric_summaries")
 }
 
 model User {
