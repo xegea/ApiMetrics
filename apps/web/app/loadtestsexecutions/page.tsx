@@ -703,25 +703,47 @@ function LoadTestsExecutionsPage() {
                       const totalErrors = loadtestsWithTotals.reduce((sum, t) => sum + (t.computedErrorCount || 0), 0);
                       const totalSuccess = totalRequests - totalErrors;
 
-                      // Build request summary rows for the latest run (fallback to [] if missing)
-                      const latestSummaries = sortedLoadtests.length > 0 ? (sortedLoadtests[sortedLoadtests.length - 1].requestMetricSummaries || []) : [];
-                      const latestSummaryRows = latestSummaries.map((r: any) => {
-                        const { totalRequests: rTotal, successCount: rSuccessCount, errorsCount: rErrorsCount, successRate: rSuccessRate } = getRequestStatusCounts(r);
+                      // Build aggregated request summary rows across all executions
+                      // Group summaries by endpoint (method + target) to aggregate totals across all request positions
+                      const aggregatedSummaries = new Map<string, any>();
+                      sortedLoadtests.forEach((loadtest: any) => {
+                        if (loadtest.requestMetricSummaries) {
+                          loadtest.requestMetricSummaries.forEach((r: any) => {
+                            // Key is just method + target, so all requests to same endpoint are aggregated
+                            const key = `${r.method}|${r.target}`;
+                            if (!aggregatedSummaries.has(key)) {
+                              aggregatedSummaries.set(key, {
+                                method: r.method,
+                                target: r.target,
+                                totalRequests: 0,
+                                successCount: 0,
+                                errorsCount: 0,
+                              });
+                            }
+                            const agg = aggregatedSummaries.get(key);
+                            const { totalRequests: rTotal, successCount: rSuccessCount, errorsCount: rErrorsCount } = getRequestStatusCounts(r);
+                            agg.totalRequests += rTotal;
+                            agg.successCount += rSuccessCount;
+                            agg.errorsCount += rErrorsCount;
+                          });
+                        }
+                      });
+
+                      // Convert aggregated map to array
+                      const aggregatedSummaryArray = Array.from(aggregatedSummaries.values());
+
+                      const latestSummaryRows = aggregatedSummaryArray.map((r: any, idx: number) => {
+                        const successRate = r.totalRequests > 0 ? r.successCount / r.totalRequests : 0;
                         return (
-                          <tr key={r.id} className="border-t">
-                            <td className="px-3 py-2">{r.requestIndex + 1}</td>
+                          <tr key={`${r.method}-${r.target}-${idx}`} className="border-t">
+                            <td className="px-3 py-2">{idx + 1}</td>
                             <td className="px-3 py-2 font-medium text-gray-800">{r.method}</td>
                             {/* Endpoint: allow wrapping so long URLs wrap to multiple lines instead of truncating */}
                             <td className="px-3 py-2 break-words whitespace-normal text-blue-700 max-w-[560px]">{r.target}</td>
-                            <td className="px-3 py-2 text-right text-gray-800">{rTotal}</td>
-                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.avgLatency)}</td>
-                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.minLatency)}</td>
-                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.maxLatency)}</td>
-                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.p50Latency)}</td>
-                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.p95Latency)}</td>
-                            <td className="px-3 py-2 text-right whitespace-nowrap">{formatLatencyFromString(r.p99Latency)}</td>
-                            <td className="px-3 py-2 text-right whitespace-nowrap">{typeof r.successRate === 'number' ? (r.successRate * 100).toFixed(1) + '%' : (rTotal > 0 ? (rSuccessRate * 100).toFixed(1) + '%' : 'N/A')}</td>
-                            <td className="px-3 py-2 text-right whitespace-nowrap">{rErrorsCount}</td>
+                            <td className="px-3 py-2 text-right text-gray-800">{r.totalRequests}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">{(successRate * 100).toFixed(1)}%</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">{r.successCount}</td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">{r.errorsCount}</td>
                           </tr>
                         );
                       });
@@ -865,10 +887,10 @@ function LoadTestsExecutionsPage() {
                           </div>
                         </div>
 
-                        {/* Requests Summary for the most recent test (under the graph) */}
-                        {sortedLoadtests.length > 0 && sortedLoadtests[sortedLoadtests.length - 1].requestMetricSummaries && (
+                        {/* Aggregated Request Summary across all executions */}
+                        {sortedLoadtests.length > 0 && latestSummaryRows && latestSummaryRows.length > 0 && (
                           <div className="mt-6">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-3">Requests Summary (Latest)</h3>
+                            <h3 className="text-lg font-semibold text-gray-800 mb-3">Requests Overview</h3>
                             <div className="border rounded-lg bg-white overflow-x-auto">
                               {/*
                                 - Horizontal scrolling allowed by outer container (overflow-x-auto)
@@ -884,12 +906,7 @@ function LoadTestsExecutionsPage() {
                                     <th className="px-3 py-2 text-left sticky top-0 bg-gray-50 z-10">Method</th>
                                     <th className="px-3 py-2 text-left sticky top-0 bg-gray-50 z-10">Endpoint</th>
                                     <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Requests</th>
-                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Avg</th>
-                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Min</th>
-                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Max</th>
-                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">P50</th>
-                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">P95</th>
-                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">P99</th>
+                                    <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Success %</th>
                                     <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Success</th>
                                     <th className="px-3 py-2 text-right sticky top-0 bg-gray-50 z-10">Errors</th>
                                   </tr>
