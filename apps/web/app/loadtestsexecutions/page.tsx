@@ -413,28 +413,35 @@ function LoadTestResultCard({ loadtest, index, isExpanded, onToggle, onDelete }:
           {loadtest.requestMetricSummaries && loadtest.requestMetricSummaries.length > 0 && (
             <div>
               <h3 className="font-semibold text-gray-800 mb-3">Requests Summary</h3>
-              <div className="overflow-x-auto border rounded-lg">
-                <table className="min-w-full text-sm text-gray-800">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left">#</th>
-                      <th className="px-3 py-2 text-left">Method</th>
-                      <th className="px-3 py-2 text-left">Endpoint</th>
-                      <th className="px-3 py-2 text-right">Requests</th>
-                      <th className="px-3 py-2 text-right">Avg</th>
-                      <th className="px-3 py-2 text-right">Min</th>
-                      <th className="px-3 py-2 text-right">Max</th>
-                      <th className="px-3 py-2 text-right">P50</th>
-                      <th className="px-3 py-2 text-right">P95</th>
-                      <th className="px-3 py-2 text-right">P99</th>
-                      <th className="px-3 py-2 text-right">Success</th>
-                      <th className="px-3 py-2 text-right">Errors</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {requestRows}
-                  </tbody>
-                </table>
+              <div className="border rounded-lg bg-white overflow-x-auto">
+                {/*
+                  - Horizontal scrolling allowed by outer container (overflow-x-auto)
+                  - Vertical scrolling enabled on inner wrapper with sticky header
+                  - Set a max-height to show up to ~10 rows; adjust as needed
+                */}
+                <div className="max-h-[480px] overflow-y-auto">
+                  <table className="min-w-full text-sm text-gray-800">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
+                      <tr>
+                        <th className="px-3 py-2 text-left">#</th>
+                        <th className="px-3 py-2 text-left">Method</th>
+                        <th className="px-3 py-2 text-left">Endpoint</th>
+                        <th className="px-3 py-2 text-right">Requests</th>
+                        <th className="px-3 py-2 text-right">Avg</th>
+                        <th className="px-3 py-2 text-right">Min</th>
+                        <th className="px-3 py-2 text-right">Max</th>
+                        <th className="px-3 py-2 text-right">P50</th>
+                        <th className="px-3 py-2 text-right">P95</th>
+                        <th className="px-3 py-2 text-right">P99</th>
+                        <th className="px-3 py-2 text-right">Success</th>
+                        <th className="px-3 py-2 text-right">Errors</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {requestRows}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
