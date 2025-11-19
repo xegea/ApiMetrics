@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getLoadTestExecutions, deleteLoadTestExecution, downloadLoadTestExecution, deleteTestResult } from '@/lib/api';
+import { BucketMetricsTable } from '@/app/components/BucketMetricsTable';
 
 interface Execution {
   id: string;
@@ -936,6 +937,18 @@ function LoadTestsExecutionsPage() {
                       </div>
                       );
                     })()}
+
+                    {/* Bucket Metrics Table */}
+                    {execution.id && session?.access_token && (
+                      <div className="mt-6 bg-white border rounded-lg p-4">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Real-Time Metrics Buckets</h3>
+                        <BucketMetricsTable 
+                          executionId={execution.id}
+                          apiUrl={process.env.NEXT_PUBLIC_APIMETRICS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}
+                          token={session.access_token}
+                        />
+                      </div>
+                    )}
 
                     {/* Loadtests list */}
                     {execution.loadtests && execution.loadtests.length > 0 ? (

@@ -71,6 +71,7 @@ model LoadTestExecution {
   tenant        Tenant        @relation(fields: [tenantId], references: [id])
   executionPlan ExecutionPlan? @relation(fields: [executionPlanId], references: [id])
   testResults   TestResult[]  @relation("ExecutionToResults")
+  metricsBuckets MetricsBucket[] @relation("ExecutionToBuckets")
 
   @@index([tenantId])
   @@index([userId])
@@ -223,4 +224,34 @@ model TestRequest {
   @@index([executionPlanId, orderId])
   @@index([tenantId, endpoint, httpMethod])
   @@map("test_requests")
+}
+
+/// Time-windowed metrics buckets from streaming Vegeta execution
+model MetricsBucket {
+  id                    String   @id @default(uuid())
+  loadTestExecutionId   String
+  bucketNumber          Int      // Sequential bucket number (0, 1, 2, ...)
+  startTime             DateTime // Start of the 5-second window
+  endTime               DateTime // End of the 5-second window
+  totalRequests         Int      // Total requests in this bucket
+  successCount          Int      // Successful requests (2xx status)
+  failureCount          Int      // Failed requests
+  avgLatency            Float    // Average latency in milliseconds
+  minLatency            Float    // Minimum latency in milliseconds
+  maxLatency            Float    // Maximum latency in milliseconds
+  p50Latency            Float    // 50th percentile latency in milliseconds
+  p95Latency            Float    // 95th percentile latency in milliseconds
+  p99Latency            Float    // 99th percentile latency in milliseconds
+  successRate           Float    // Success rate as decimal (0-1)
+  bytesIn               Int      // Total bytes received
+  bytesOut              Int      // Total bytes sent
+  statusCodes           String   // JSON string of status code distribution
+  errors                String   // JSON array of unique errors
+  createdAt             DateTime @default(now())
+
+  loadTestExecution LoadTestExecution @relation("ExecutionToBuckets", fields: [loadTestExecutionId], references: [id], onDelete: Cascade)
+
+  @@index([loadTestExecutionId])
+  @@index([loadTestExecutionId, bucketNumber])
+  @@map("metrics_buckets")
 }

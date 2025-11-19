@@ -57,6 +57,26 @@ interface CreateTestResultBody {
   requestMetrics?: RequestMetricSummaryInput[];
 }
 
+interface MetricsBucketBody {
+  bucketNumber: number;
+  startTime: string;
+  endTime: string;
+  totalRequests: number;
+  successCount: number;
+  failureCount: number;
+  avgLatency: number;
+  minLatency: number;
+  maxLatency: number;
+  p50Latency: number;
+  p95Latency: number;
+  p99Latency: number;
+  successRate: number;
+  bytesIn: number;
+  bytesOut: number;
+  statusCodes: Record<string, number>;
+  errors: string[];
+}
+
 interface GetLoadTestExecutionsParams {
   executionPlanId?: string;
 }
@@ -719,22 +739,124 @@ async function downloadLoadTestExecution(
   console.log('DEBUG: Date:', dateStr);
   console.log('DEBUG: Time:', timeStr);
 
-  // Determine if this is a local development environment
-  const isLocal = request.hostname === 'localhost' || request.hostname === '127.0.0.1' || request.hostname?.startsWith('localhost:');
-  const envFlag = isLocal ? ' --env local' : '';
-
-  // Add instructions with the exact filename (no wildcards)
+  // Add instructions with the exact filename (no execution ID needed - CLI will create it)
   executionPlan.instructions = {
     step1: 'Install Node.js from https://nodejs.org if you do not have it',
-    step2: `Open Terminal and run: npx @xegea/apimetrics-cli execute-plan ~/Downloads/${fileName}${envFlag}`,
-  step3: 'Results will be automatically uploaded to your ApiMetrics Test Executions page',
-  };
-
-  reply.header('Access-Control-Allow-Origin', '*');
+    step2: `Open Terminal and run: npx @xegea/apimetrics-cli execute-plan --env local ~/Downloads/${fileName}`,
+    step3: 'Results will be automatically uploaded to your ApiMetrics Test Executions page',
+  };  reply.header('Access-Control-Allow-Origin', '*');
   reply.header('Content-Type', 'application/json');
   reply.header('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
 
   reply.send(executionPlan);
+}
+
+/**
+ * GET /loadtestsexecutions/:id/buckets
+ * Fetch all metrics buckets for a given execution
+ */
+async function getMetricsBuckets(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  const user = (request as any).user;
+  const ensured = await ensureUserAndTenant({
+    userId: user.userId,
+    email: user.email ?? `unknown+${user.userId}@example.com`,
+  });
+
+  const { id } = request.params;
+
+  // Verify the execution exists and belongs to the tenant
+  const execution = await prisma.loadTestExecution.findFirst({
+    where: {
+      id,
+      tenantId: ensured.tenantId,
+    },
+  });
+
+  if (!execution) {
+    return reply.status(404).send({ message: 'Load test execution not found' });
+  }
+
+  // Fetch all buckets for this execution, ordered by bucket number
+  const buckets = await prisma.metricsBucket.findMany({
+    where: {
+      loadTestExecutionId: id,
+    },
+    orderBy: {
+      bucketNumber: 'asc',
+    },
+  });
+
+  // Transform the response to parse JSON strings back to objects
+  const transformedBuckets = buckets.map((bucket) => ({
+    ...bucket,
+    statusCodes: bucket.statusCodes ? JSON.parse(bucket.statusCodes) : {},
+    errors: bucket.errors ? JSON.parse(bucket.errors) : [],
+  }));
+
+  reply.send(transformedBuckets);
+}
+
+/**
+ * POST /loadtestsexecutions/:id/buckets
+ * Store a 5-second aggregated metrics bucket from streaming Vegeta execution
+ */
+async function createMetricsBucket(
+  request: FastifyRequest<{ Params: { id: string }; Body: MetricsBucketBody }>,
+  reply: FastifyReply
+) {
+  const user = (request as any).user;
+  const ensured = await ensureUserAndTenant({
+    userId: user.userId,
+    email: user.email ?? `unknown+${user.userId}@example.com`,
+  });
+
+  const { id } = request.params;
+  const bucket = request.body;
+
+  // Verify the execution exists and belongs to the tenant
+  const execution = await prisma.loadTestExecution.findFirst({
+    where: {
+      id,
+      tenantId: ensured.tenantId,
+    },
+  });
+
+  if (!execution) {
+    return reply.status(404).send({ message: 'Load test execution not found' });
+  }
+
+  // Store the bucket
+  const metricsBucket = await prisma.metricsBucket.create({
+    data: {
+      loadTestExecutionId: id,
+      bucketNumber: bucket.bucketNumber,
+      startTime: new Date(bucket.startTime),
+      endTime: new Date(bucket.endTime),
+      totalRequests: bucket.totalRequests,
+      successCount: bucket.successCount,
+      failureCount: bucket.failureCount,
+      avgLatency: bucket.avgLatency,
+      minLatency: bucket.minLatency,
+      maxLatency: bucket.maxLatency,
+      p50Latency: bucket.p50Latency,
+      p95Latency: bucket.p95Latency,
+      p99Latency: bucket.p99Latency,
+      successRate: bucket.successRate,
+      bytesIn: bucket.bytesIn,
+      bytesOut: bucket.bytesOut,
+      statusCodes: JSON.stringify(bucket.statusCodes),
+      errors: JSON.stringify(bucket.errors),
+    },
+  });
+
+  reply.status(201).send({
+    id: metricsBucket.id,
+    bucketNumber: metricsBucket.bucketNumber,
+    message: 'Bucket stored successfully',
+  });
 }
 
 export async function loadTestExecutionsRoutes(fastify: FastifyInstance) {
@@ -767,6 +889,16 @@ export async function loadTestExecutionsRoutes(fastify: FastifyInstance) {
   fastify.post('/loadtestsexecutions/:id/loadtests', {
     preHandler: verifyToken,
     handler: createTestResult,
+  });
+
+  fastify.get('/loadtestsexecutions/:id/buckets', {
+    preHandler: verifyToken,
+    handler: getMetricsBuckets,
+  });
+
+  fastify.post('/loadtestsexecutions/:id/buckets', {
+    preHandler: verifyToken,
+    handler: createMetricsBucket,
   });
 
   fastify.get('/loadtestsexecutions/:id/metrics/:testResultId/requests', {
