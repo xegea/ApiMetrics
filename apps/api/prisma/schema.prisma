@@ -251,6 +251,7 @@ model MetricsBucket {
 
   loadTestExecution LoadTestExecution @relation("ExecutionToBuckets", fields: [loadTestExecutionId], references: [id], onDelete: Cascade)
 
+  @@unique([loadTestExecutionId, bucketNumber])
   @@index([loadTestExecutionId])
   @@index([loadTestExecutionId, bucketNumber])
   @@map("metrics_buckets")

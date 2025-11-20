@@ -828,9 +828,34 @@ async function createMetricsBucket(
     return reply.status(404).send({ message: 'Load test execution not found' });
   }
 
-  // Store the bucket
-  const metricsBucket = await prisma.metricsBucket.create({
-    data: {
+  // Store or update the bucket (upsert to handle updates for late-arriving metrics)
+  const metricsBucket = await prisma.metricsBucket.upsert({
+    where: {
+      loadTestExecutionId_bucketNumber: {
+        loadTestExecutionId: id,
+        bucketNumber: bucket.bucketNumber,
+      },
+    },
+    update: {
+      // Update with the latest complete data
+      startTime: new Date(bucket.startTime),
+      endTime: new Date(bucket.endTime),
+      totalRequests: bucket.totalRequests,
+      successCount: bucket.successCount,
+      failureCount: bucket.failureCount,
+      avgLatency: bucket.avgLatency,
+      minLatency: bucket.minLatency,
+      maxLatency: bucket.maxLatency,
+      p50Latency: bucket.p50Latency,
+      p95Latency: bucket.p95Latency,
+      p99Latency: bucket.p99Latency,
+      successRate: bucket.successRate,
+      bytesIn: bucket.bytesIn,
+      bytesOut: bucket.bytesOut,
+      statusCodes: JSON.stringify(bucket.statusCodes),
+      errors: JSON.stringify(bucket.errors),
+    },
+    create: {
       loadTestExecutionId: id,
       bucketNumber: bucket.bucketNumber,
       startTime: new Date(bucket.startTime),
