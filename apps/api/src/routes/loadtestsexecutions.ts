@@ -392,11 +392,17 @@ async function createTestResult(
   reply: FastifyReply
 ) {
   const fs = require('fs');
-  const logFile = '/tmp/api-debug.log';
+  const os = require('os');
+  const path = require('path');
+  const logFile = path.join(os.tmpdir(), 'api-debug.log');
   
   const log = (msg: string) => {
     const timestamp = new Date().toISOString();
-    fs.appendFileSync(logFile, `[${timestamp}] ${msg}\n`);
+    try {
+      fs.appendFileSync(logFile, `[${timestamp}] ${msg}\n`);
+    } catch (err) {
+      // Silently ignore file write errors
+    }
     console.log(msg);
   };
   
