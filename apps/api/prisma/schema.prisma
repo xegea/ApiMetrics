@@ -107,6 +107,7 @@ model TestResult {
   loadTestExecution LoadTestExecution @relation("ExecutionToResults", fields: [loadTestExecutionId], references: [id], onDelete: Cascade)
   requestMetrics    RequestMetric[]   @relation("ResultToRequestMetrics")
   requestMetricSummaries RequestMetricSummary[] @relation("ResultToRequestMetricSummaries")
+  metricsBuckets    MetricsBucket[]   @relation("ResultToBuckets")
 
   @@index([loadTestExecutionId])
   @@map("test_results")
@@ -230,6 +231,7 @@ model TestRequest {
 model MetricsBucket {
   id                    String   @id @default(uuid())
   loadTestExecutionId   String
+  testResultId          String
   bucketNumber          Int      // Sequential bucket number (0, 1, 2, ...)
   startTime             DateTime // Start of the 5-second window
   endTime               DateTime // End of the 5-second window
@@ -250,9 +252,11 @@ model MetricsBucket {
   createdAt             DateTime @default(now())
 
   loadTestExecution LoadTestExecution @relation("ExecutionToBuckets", fields: [loadTestExecutionId], references: [id], onDelete: Cascade)
+  testResult TestResult @relation("ResultToBuckets", fields: [testResultId], references: [id], onDelete: Cascade)
 
-  @@unique([loadTestExecutionId, bucketNumber])
+  @@unique([testResultId, bucketNumber])
   @@index([loadTestExecutionId])
+  @@index([testResultId])
   @@index([loadTestExecutionId, bucketNumber])
   @@map("metrics_buckets")
 }

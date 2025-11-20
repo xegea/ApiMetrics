@@ -58,6 +58,7 @@ interface CreateTestResultBody {
 }
 
 interface MetricsBucketBody {
+  testResultId: string;
   bucketNumber: number;
   startTime: string;
   endTime: string;
@@ -828,11 +829,23 @@ async function createMetricsBucket(
     return reply.status(404).send({ message: 'Load test execution not found' });
   }
 
+  // Verify the test result exists and belongs to this execution
+  const testResult = await prisma.testResult.findFirst({
+    where: {
+      id: bucket.testResultId,
+      loadTestExecutionId: id,
+    },
+  });
+
+  if (!testResult) {
+    return reply.status(404).send({ message: 'Test result not found for this execution' });
+  }
+
   // Store or update the bucket (upsert to handle updates for late-arriving metrics)
   const metricsBucket = await prisma.metricsBucket.upsert({
     where: {
-      loadTestExecutionId_bucketNumber: {
-        loadTestExecutionId: id,
+      testResultId_bucketNumber: {
+        testResultId: bucket.testResultId,
         bucketNumber: bucket.bucketNumber,
       },
     },
@@ -857,6 +870,7 @@ async function createMetricsBucket(
     },
     create: {
       loadTestExecutionId: id,
+      testResultId: bucket.testResultId,
       bucketNumber: bucket.bucketNumber,
       startTime: new Date(bucket.startTime),
       endTime: new Date(bucket.endTime),
@@ -881,6 +895,126 @@ async function createMetricsBucket(
     id: metricsBucket.id,
     bucketNumber: metricsBucket.bucketNumber,
     message: 'Bucket stored successfully',
+  });
+}
+
+/**
+ * PATCH /loadtestsexecutions/:id/loadtests/:testResultId
+ * Update an existing test result with final metrics
+ */
+async function updateTestResult(
+  request: FastifyRequest<{ Params: { id: string; testResultId: string }; Body: CreateTestResultBody }>,
+  reply: FastifyReply
+) {
+  const user = (request as any).user;
+  const ensured = await ensureUserAndTenant({
+    userId: user.userId,
+    email: user.email ?? `unknown+${user.userId}@example.com`,
+  });
+
+  const { id, testResultId } = request.params;
+  const {
+    avgLatency,
+    p95Latency,
+    successRate,
+    timestamp,
+    minLatency,
+    maxLatency,
+    p50Latency,
+    p99Latency,
+    totalRequests,
+    testDuration,
+    actualRate,
+    throughput,
+    bytesIn,
+    bytesOut,
+    statusCodes,
+    errorDetails,
+    requestMetrics,
+  } = request.body;
+
+  // Verify the execution exists and belongs to the tenant
+  const execution = await prisma.loadTestExecution.findFirst({
+    where: {
+      id,
+      tenantId: ensured.tenantId,
+    },
+  });
+
+  if (!execution) {
+    return reply.status(404).send({ message: 'Load test execution not found' });
+  }
+
+  // Verify the test result exists and belongs to this execution
+  const testResult = await prisma.testResult.findFirst({
+    where: {
+      id: testResultId,
+      loadTestExecutionId: id,
+    },
+  });
+
+  if (!testResult) {
+    return reply.status(404).send({ message: 'Test result not found' });
+  }
+
+  // Update the test result with final metrics
+  const updated = await prisma.testResult.update({
+    where: { id: testResultId },
+    data: {
+      avgLatency: avgLatency || null,
+      p95Latency: p95Latency || null,
+      successRate: successRate || null,
+      timestamp: timestamp ? new Date(timestamp) : new Date(),
+      minLatency: minLatency || null,
+      maxLatency: maxLatency || null,
+      p50Latency: p50Latency || null,
+      p99Latency: p99Latency || null,
+      totalRequests: totalRequests || null,
+      testDuration: testDuration || null,
+      actualRate: actualRate || null,
+      throughput: throughput || null,
+      bytesIn: bytesIn || null,
+      bytesOut: bytesOut || null,
+      statusCodes: statusCodes ? JSON.stringify(statusCodes) : null,
+      errorDetails: errorDetails ? JSON.stringify(errorDetails) : null,
+    },
+  });
+
+  // Handle request metric summaries if provided
+  if (requestMetrics && Array.isArray(requestMetrics) && requestMetrics.length > 0) {
+    // Delete existing summaries for this test result
+    await prisma.requestMetricSummary.deleteMany({
+      where: { testResultId },
+    });
+
+    // Create new summaries
+    for (const metric of requestMetrics) {
+      await prisma.requestMetricSummary.create({
+        data: {
+          testResultId,
+          requestIndex: metric.requestIndex || 0,
+          method: metric.method || 'GET',
+          target: metric.target || '',
+          totalRequests: metric.totalRequests || 0,
+          avgLatency: BigInt(metric.avgLatency || 0),
+          minLatency: BigInt(metric.minLatency || 0),
+          maxLatency: BigInt(metric.maxLatency || 0),
+          p50Latency: BigInt(metric.p50Latency || 0),
+          p95Latency: BigInt(metric.p95Latency || 0),
+          p99Latency: BigInt(metric.p99Latency || 0),
+          successRate: metric.successRate || 0,
+          bytesIn: metric.bytesIn || 0,
+          bytesOut: metric.bytesOut || 0,
+          statusCodes: JSON.stringify(metric.statusCodes || {}),
+          errors: JSON.stringify(metric.errors || []),
+        },
+      });
+    }
+  }
+
+  reply.send({
+    id: updated.id,
+    message: 'Test result updated successfully',
   });
 }
 
@@ -914,6 +1048,11 @@ export async function loadTestExecutionsRoutes(fastify: FastifyInstance) {
   fastify.post('/loadtestsexecutions/:id/loadtests', {
     preHandler: verifyToken,
     handler: createTestResult,
+  });
+
+  fastify.patch('/loadtestsexecutions/:id/loadtests/:testResultId', {
+    preHandler: verifyToken,
+    handler: updateTestResult,
   });
 
   fastify.get('/loadtestsexecutions/:id/buckets', {
