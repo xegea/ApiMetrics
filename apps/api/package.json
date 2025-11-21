@@ -1,13 +1,8 @@
 {
   "name": "apimetrics-api",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Fastify backend API for ApiMetrics project",
   "main": "dist/index.js",
-  "files": [
-    "dist",
-    "LICENSE",
-    "README.md"
-  ],
   "scripts": {
     "build": "prisma generate && tsc",
     "dev": "dotenv -e .env.local -- tsx watch src/index.ts",
@@ -28,7 +23,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@xegea/apimetrics-shared": "^1.0.0",
+    "@apimetrics/shared": "file:../../packages/shared",
     "@fastify/cors": "^8.5.0",
     "@prisma/client": "^5.8.1",
     "@types/bcrypt": "^5.0.2",
