@@ -749,7 +749,7 @@ async function downloadLoadTestExecution(
   // Add instructions with the exact filename (no execution ID needed - CLI will create it)
   executionPlan.instructions = {
     step1: 'Install Node.js from https://nodejs.org if you do not have it',
-    step2: `Open Terminal and run: npx @xegea/apimetrics-cli execute-plan --env local ~/Downloads/${fileName}`,
+    step2: `npx @xegea/apimetrics-cli execute-plan --env local Downloads/${fileName}`,
     step3: 'Results will be automatically uploaded to your ApiMetrics Test Executions page',
   };  reply.header('Access-Control-Allow-Origin', '*');
   reply.header('Content-Type', 'application/json');
@@ -822,6 +822,12 @@ async function createMetricsBucket(
 
   const { id } = request.params;
   const bucket = request.body;
+  
+  // DEBUG: Log incoming bucket data
+  console.log('\n🪣 === INCOMING BUCKET DATA ===');
+  console.log(`Bucket #${bucket.bucketNumber}: minLatency=${bucket.minLatency}, maxLatency=${bucket.maxLatency}, avgLatency=${bucket.avgLatency}`);
+  console.log(`Total Requests: ${bucket.totalRequests}`);
+  console.log('=== END BUCKET DATA ===\n');
 
   // Verify the execution exists and belongs to the tenant
   const execution = await prisma.loadTestExecution.findFirst({

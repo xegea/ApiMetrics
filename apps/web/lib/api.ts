@@ -316,7 +316,11 @@ export async function downloadLoadTestExecution(id: string): Promise<{ filename:
   // Extract filename from the instructions.step2 command
   let filename = 'execution-plan.json';
   if (jsonData.instructions && jsonData.instructions.step2) {
-    const match = jsonData.instructions.step2.match(/~\/Downloads\/(.+?)(?:\s|$)/);
+    // Try to extract filename from various command formats:
+    // - Downloads/filename.json
+    // - ~/Downloads/filename.json  
+    // - %USERPROFILE%\Downloads\filename.json
+    const match = jsonData.instructions.step2.match(/Downloads[\/\\]([^\s]+\.json)/);
     if (match) {
       filename = match[1];
     }
