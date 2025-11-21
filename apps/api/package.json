@@ -1,5 +1,5 @@
 {
-  "name": "@xegea/apimetrics-api",
+  "name": "apimetrics-api",
   "version": "1.0.0",
   "description": "Fastify backend API for ApiMetrics project",
   "main": "dist/index.js",
