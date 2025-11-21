@@ -1,5 +1,5 @@
 {
-  "name": "@apimetrics/shared",
+  "name": "@xegea/apimetrics-shared",
   "version": "0.1.0",
   "description": "Shared types and utilities for ApiMetrics project",
   "main": "dist/index.js",
