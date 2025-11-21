@@ -1,6 +1,6 @@
 {
   "name": "@xegea/apimetrics-api",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Fastify backend API for ApiMetrics project",
   "main": "dist/index.js",
   "files": [
@@ -28,7 +28,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@xegea/apimetrics-shared": "^0.1.0",
+    "@xegea/apimetrics-shared": "^0.2.0",
     "@fastify/cors": "^8.5.0",
     "@prisma/client": "^5.8.1",
     "@types/bcrypt": "^5.0.2",
