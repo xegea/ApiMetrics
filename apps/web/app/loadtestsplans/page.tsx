@@ -449,12 +449,21 @@ export default function ExecutionPlansPage() {
 
   const handleRenameExecutionPlan = async (planId: string) => {
     if (!renameValue.trim()) { alert('Name cannot be empty'); return; }
+
+    // Optimistic update: update local state immediately
+    const originalPlans = [...executionPlans];
+    const newName = renameValue.trim();
+    setExecutionPlans(prev => prev.map(plan =>
+      plan.id === planId ? { ...plan, name: newName } : plan
+    ));
+    setRenamingPlan(null);
+    setRenameValue('');
+
     try {
-      await updateExecutionPlan(planId, { name: renameValue.trim() });
-      await listExecutionPlans();
-      setRenamingPlan(null);
-      setRenameValue('');
+      await updateExecutionPlan(planId, { name: newName });
     } catch (error) {
+      // Revert on error
+      setExecutionPlans(originalPlans);
       alert('Error: ' + (error as Error).message);
     }
   };
@@ -853,17 +862,18 @@ export default function ExecutionPlansPage() {
                 const planKey = `plan_${plan.id}`;
                 return (
                   <DroppablePlan key={planKey} plan={plan} planKey={planKey}>
-                    <div className="flex justify-between items-center p-4">
-                      <div onClick={() => togglePlan(planKey)} className="flex items-center gap-4 cursor-pointer flex-1">
+                    <div className="flex items-center p-4">
+                      {/* Section 1: Load Test Name */}
+                      <div onClick={() => togglePlan(planKey)} className="flex items-center gap-4 cursor-pointer flex-1 justify-start">
                         <FolderIcon className="text-2xl text-blue-600" />
                         {renamingPlan === plan.id ? (
-                          <div className="flex items-center gap-2 flex-1">
+                          <div className="flex items-center gap-2 flex-1 justify-end">
                             <input
                               type="text"
                               value={renameValue}
                               onChange={(e) => setRenameValue(e.target.value)}
                               autoFocus
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm bg-white text-gray-900"
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm bg-white text-gray-900 max-w-xs"
                             />
                             <button onClick={(e) => { e.stopPropagation(); handleRenameExecutionPlan(plan.id); }} className="px-2 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600">Save</button>
                             <button onClick={(e) => { e.stopPropagation(); setRenamingPlan(null); setRenameValue(''); }} className="px-2 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600">Cancel</button>
@@ -871,17 +881,23 @@ export default function ExecutionPlansPage() {
                         ) : (
                           <>
                             <span className="text-lg font-medium text-gray-800">{plan.name}</span>
-                            <span className="text-sm text-gray-500">({plan.testRequests.length} requests{getPlanConfigSummary(plan)})</span>
+                            <button onClick={(e) => { e.stopPropagation(); setRenamingPlan(plan.id); setRenameValue(plan.name); }} className="p-0.5 rounded text-gray-600 hover:text-blue-600 hover:bg-blue-50 -ml-1" title="Rename">
+                              <BorderColorIcon fontSize="small" />
+                            </button>
                           </>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+
+                      {/* Section 2: Configuration Summary */}
+                      <div className="flex-1 text-center cursor-pointer" onClick={() => togglePlan(planKey)}>
+                        <span className="text-sm text-gray-500">({plan.testRequests.length} requests{getPlanConfigSummary(plan)})</span>
+                      </div>
+
+                      {/* Section 3: Buttons and Icons */}
+                      <div className="flex items-center gap-2 flex-1 justify-end">
                         <button onClick={(e) => { e.stopPropagation(); handleRunLoadTest(plan); }} className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 flex items-center gap-1" title="New Load Test">
                           <PlayCircleIcon fontSize="small" />
                           <span>New Load Test</span>
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); setRenamingPlan(plan.id); setRenameValue(plan.name); }} className="p-1 rounded text-gray-600 hover:text-blue-600 hover:bg-blue-50" title="Rename">
-                          <BorderColorIcon fontSize="small" />
                         </button>
                         <button onClick={(e) => { e.stopPropagation(); handleDeleteExecutionPlan(plan.id); }} className="p-1 rounded text-gray-600 hover:text-red-600 hover:bg-red-50" title="Delete">
                           <DeleteOutlineIcon fontSize="small" />

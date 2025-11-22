@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { BucketMetricsChart } from './BucketMetricsChart';
 
 interface MetricsBucket {
   id: string;
@@ -214,6 +215,9 @@ export function BucketMetricsTable({ executionId, apiUrl, token }: BucketMetrics
           </div>
         </div>
       )}
+
+      {/* Metrics Timeline Chart */}
+      {buckets.length > 0 && <BucketMetricsChart buckets={buckets} />}
 
       {/* Buckets Table */}
       {buckets.length > 0 ? (
