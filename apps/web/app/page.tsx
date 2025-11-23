@@ -10,6 +10,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import LockIcon from '@mui/icons-material/Lock';
 import BoltIcon from '@mui/icons-material/Bolt';
 import CheckIcon from '@mui/icons-material/Check';
+import BucketMetricsChartExample from './components/BucketMetricsChart.example';
 
 const iconMap = {
   rocket: RocketLaunchIcon,
@@ -217,35 +218,9 @@ export default function Home() {
               <p className="text-gray-600">30-second test with 10 RPS showing P50, P95, P99 latency and success rates</p>
             </div>
 
-            {/* Sample Chart Placeholder - In a real implementation, you'd import and use BucketMetricsChart */}
-            <div className="bg-white rounded-lg p-6 border border-gray-200">
-              <div className="h-80 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-dashed border-blue-200">
-                <div className="text-center">
-                  <TrendingUpIcon className="text-6xl text-blue-500 mx-auto mb-4" />
-                  <h4 className="text-xl font-semibold text-gray-900 mb-2">Interactive Performance Chart</h4>
-                  <p className="text-gray-600 mb-4">
-                    Real-time visualization of your API load test results
-                  </p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div className="bg-green-50 p-3 rounded-lg">
-                      <div className="text-green-600 font-semibold">95.8%</div>
-                      <div className="text-gray-600">Success Rate</div>
-                    </div>
-                    <div className="bg-blue-50 p-3 rounded-lg">
-                      <div className="text-blue-600 font-semibold">145ms</div>
-                      <div className="text-gray-600">Avg Latency</div>
-                    </div>
-                    <div className="bg-orange-50 p-3 rounded-lg">
-                      <div className="text-orange-600 font-semibold">280ms</div>
-                      <div className="text-gray-600">P95 Latency</div>
-                    </div>
-                    <div className="bg-purple-50 p-3 rounded-lg">
-                      <div className="text-purple-600 font-semibold">120/min</div>
-                      <div className="text-gray-600">Throughput</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            {/* Sample Chart - Real Interactive Component */}
+            <div className="bg-gray-950 rounded-lg p-6 border border-gray-800">
+              <BucketMetricsChartExample />
             </div>
 
             <div className="mt-6 text-center">
