@@ -11,6 +11,111 @@ import LockIcon from '@mui/icons-material/Lock';
 import BoltIcon from '@mui/icons-material/Bolt';
 import CheckIcon from '@mui/icons-material/Check';
 import BucketMetricsChartExample from './components/BucketMetricsChart.example';
+import { BucketMetricsChart } from './components/BucketMetricsChart';
+
+// Sample data for the home page chart
+const sampleBuckets = [
+  {
+    id: '1',
+    bucketNumber: 1,
+    startTime: '2025-11-22T10:00:00Z',
+    endTime: '2025-11-22T10:00:10Z',
+    totalRequests: 120,
+    successCount: 115,
+    failureCount: 5,
+    avgLatency: 145.5,
+    minLatency: 50,
+    maxLatency: 320,
+    p50Latency: 130,
+    p95Latency: 280,
+    p99Latency: 310,
+    successRate: 95.83,
+    bytesIn: 12000,
+    bytesOut: 8000,
+    statusCodes: { '200': 115, '500': 5 } as Record<string, number>,
+    errors: ['Connection timeout'],
+  },
+  {
+    id: '2',
+    bucketNumber: 2,
+    startTime: '2025-11-22T10:00:10Z',
+    endTime: '2025-11-22T10:00:20Z',
+    totalRequests: 150,
+    successCount: 145,
+    failureCount: 5,
+    avgLatency: 168.2,
+    minLatency: 60,
+    maxLatency: 420,
+    p50Latency: 155,
+    p95Latency: 380,
+    p99Latency: 410,
+    successRate: 96.67,
+    bytesIn: 15000,
+    bytesOut: 10000,
+    statusCodes: { '200': 145, '500': 5 } as Record<string, number>,
+    errors: [],
+  },
+  {
+    id: '3',
+    bucketNumber: 3,
+    startTime: '2025-11-22T10:00:20Z',
+    endTime: '2025-11-22T10:00:30Z',
+    totalRequests: 180,
+    successCount: 165,
+    failureCount: 15,
+    avgLatency: 210.8,
+    minLatency: 70,
+    maxLatency: 650,
+    p50Latency: 185,
+    p95Latency: 580,
+    p99Latency: 640,
+    successRate: 91.67,
+    bytesIn: 18000,
+    bytesOut: 12000,
+    statusCodes: { '200': 165, '500': 10, '502': 5 } as Record<string, number>,
+    errors: ['Gateway timeout', 'Internal server error'],
+  },
+  {
+    id: '4',
+    bucketNumber: 4,
+    startTime: '2025-11-22T10:00:30Z',
+    endTime: '2025-11-22T10:00:40Z',
+    totalRequests: 200,
+    successCount: 190,
+    failureCount: 10,
+    avgLatency: 192.3,
+    minLatency: 55,
+    maxLatency: 480,
+    p50Latency: 170,
+    p95Latency: 420,
+    p99Latency: 470,
+    successRate: 95.0,
+    bytesIn: 20000,
+    bytesOut: 15000,
+    statusCodes: { '200': 190, '500': 8, '503': 2 } as Record<string, number>,
+    errors: ['Service unavailable'],
+  },
+  {
+    id: '5',
+    bucketNumber: 5,
+    startTime: '2025-11-22T10:00:40Z',
+    endTime: '2025-11-22T10:00:50Z',
+    totalRequests: 220,
+    successCount: 210,
+    failureCount: 10,
+    avgLatency: 175.5,
+    minLatency: 45,
+    maxLatency: 390,
+    p50Latency: 160,
+    p95Latency: 350,
+    p99Latency: 380,
+    successRate: 95.45,
+    bytesIn: 22000,
+    bytesOut: 16000,
+    statusCodes: { '200': 210, '500': 10 } as Record<string, number>,
+    errors: [],
+  },
+];
 
 const iconMap = {
   rocket: RocketLaunchIcon,
@@ -220,7 +325,7 @@ export default function Home() {
 
             {/* Sample Chart - Real Interactive Component */}
             <div className="bg-gray-950 rounded-lg p-6 border border-gray-800">
-              <BucketMetricsChartExample />
+              <BucketMetricsChart buckets={sampleBuckets} />
             </div>
 
             <div className="mt-6 text-center">
