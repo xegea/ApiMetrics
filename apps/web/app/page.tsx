@@ -317,24 +317,24 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="bg-gray-50 rounded-2xl p-8 shadow-lg">
-            <div className="mb-6">
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">Sample Load Test Results</h3>
-              <p className="text-gray-600">30-second test with 10 RPS showing P50, P95, P99 latency and success rates</p>
+          <div className="bg-gray-50 rounded-2xl p-6 shadow-lg">
+            <div className="mb-4">
+              <h3 className="text-xl font-semibold text-gray-900 mb-1">Sample Load Test Results</h3>
+              <p className="text-sm text-gray-600">30-second test with 10 RPS showing P50, P95, P99 latency and success rates</p>
             </div>
 
             {/* Sample Chart - Real Interactive Component */}
-            <div className="bg-gray-950 rounded-lg p-6 border border-gray-800">
+            <div className="bg-gray-950 rounded-lg p-4 border border-gray-800" style={{ height: '300px' }}>
               <BucketMetricsChart buckets={sampleBuckets} />
             </div>
 
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-500 mb-4">
+            <div className="mt-4 text-center">
+              <p className="text-xs text-gray-500 mb-3">
                 Charts update in real-time during test execution with 5-second buckets
               </p>
               <Link
                 href={user ? '/loadtestsexecutions' : '/login'}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
+                className="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition text-sm"
               >
                 <AnalyticsIcon />
                 {user ? 'View Your Test Results' : 'Start Your First Test'}
