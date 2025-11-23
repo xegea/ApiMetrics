@@ -142,6 +142,7 @@ export interface CreateExecutionPlanRequest {
   delayBetweenRequests?: string;
   iterations?: number;
   rampUpPeriods?: string;
+  createDefaultRequest?: boolean;
 }
 
 export interface GetLoadTestPlansResponse {

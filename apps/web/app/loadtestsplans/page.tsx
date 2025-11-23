@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createExecutionPlan, getLoadTestPlans, createTestRequest, ExecutionPlanWithRequests, TestRequest, reorderTestRequests, moveTestRequest, deleteExecutionPlan, deleteTestRequest, updateExecutionPlan, updateTestRequest, createLoadTestExecution } from '@/lib/api';
+import { parsePostmanCollection, parsePostmanEnvironment } from '@/lib/postman';
 import { useAuth } from '@/lib/auth';
 import BorderColorIcon from '@mui/icons-material/BorderColor';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -225,8 +226,17 @@ export default function ExecutionPlansPage() {
   const [savingPlans, setSavingPlans] = useState<string[]>([]);
   const [expandedAdvancedSettings, setExpandedAdvancedSettings] = useState<string[]>([]);
   const [testingRequest, setTestingRequest] = useState<TestRequest | null>(null);
-  const [testResponse, setTestResponse] = useState<{status: number; statusText: string; headers: Record<string, string>; body: string; error?: string} | null>(null);
+  const [testResponse, setTestResponse] = useState<{status: number; statusText: string; headers: Record<string, string>; body: string; error?: string; cors?: boolean} | null>(null);
   const [isTestLoading, setIsTestLoading] = useState(false);
+  const [importMode, setImportMode] = useState<'manual' | 'postman'>('manual');
+  const [postmanFile, setPostmanFile] = useState<File | null>(null);
+  const [postmanEnvFile, setPostmanEnvFile] = useState<File | null>(null);
+  const [envVars, setEnvVars] = useState<Record<string,string>>({});
+  const [editedEnvVars, setEditedEnvVars] = useState<Record<string,string>>({});
+  const [previewRequests, setPreviewRequests] = useState<Array<{endpoint:string, httpMethod:string, requestBody?:string, headers?:string}>>([]);
+  const [parsedCollection, setParsedCollection] = useState<any | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const hasInitialized = useRef(false);
 
   const parseEndpoint = (endpoint: string) => {
@@ -297,16 +307,9 @@ export default function ExecutionPlansPage() {
     return colors[method] || 'bg-gray-500';
   };
 
-  useEffect(() => {
-    if (session?.user?.email && !hasInitialized.current) {
-      hasInitialized.current = true;
-      listExecutionPlans();
-    }
-  }, [session?.user?.email]);
-
   const listExecutionPlans = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const plans = await getLoadTestPlans();
       setExecutionPlans(plans.loadtestplans);
     } catch (error) {
@@ -319,12 +322,12 @@ export default function ExecutionPlansPage() {
   const saveExecutionPlan = async () => {
     if (!isValidPlanName()) return;
     try {
-      await createExecutionPlan({ 
+      await createExecutionPlan({
         name: planName.trim(),
         executionTime: '1m',
         delayBetweenRequests: '100ms',
         iterations: 1,
-        rampUpPeriods: undefined // Empty, user can add later
+        rampUpPeriods: undefined
       });
       setPlanName('');
       await listExecutionPlans();
@@ -333,6 +336,109 @@ export default function ExecutionPlansPage() {
       alert('Error creating execution plan: ' + (error as Error).message);
     }
   };
+
+  const importFromPostman = async () => {
+    if (!isValidPlanName() || !postmanFile) return;
+    setIsImporting(true);
+    try {
+      const collectionText = await postmanFile.text();
+      const collection = JSON.parse(collectionText);
+      // Validate collection has basic structure
+      if (!collection.info || !collection.item) throw new Error('Invalid Postman collection format.');
+      // Extract schema info and validate Postman Collection v2.1.0
+      const infoSchema = collection.info?.schema || collection.schema || '';
+      if (!/v2\.1\.0/.test(String(infoSchema))) {
+        throw new Error('Unsupported Postman collection schema. Please import a Postman Collection v2.1 (schema v2.1.0) JSON file.');
+      }
+
+      // Parse environment file if present
+      let parsedEnv: Record<string,string> = {};
+      if (postmanEnvFile) {
+        const envText = await postmanEnvFile.text();
+        const envObj = JSON.parse(envText);
+        parsedEnv = parsePostmanEnvironment(envObj);
+        setEnvVars(parsedEnv);
+        setEditedEnvVars(parsedEnv);
+      } else {
+        setEnvVars({});
+        setEditedEnvVars({});
+      }
+
+  // Build preview of requests using the envVars (do not create resources yet)
+  setParsedCollection(collection);
+  const requestsPreview = parsePostmanCollection(collection, postmanEnvFile ? parsedEnv : {});
+      setPreviewRequests(requestsPreview);
+      setShowPreview(true);
+
+      // Wait for user to confirm in preview to actually create the plan
+      // The confirmed handler will call createExecutionPlan / createTestRequest
+
+    } catch (error) {
+      alert('Error importing Postman collection: ' + (error as Error).message);
+    } finally {
+        setIsImporting(false);
+      }
+    };
+
+  const confirmImportFromPostman = async () => {
+    if (!isValidPlanName() || !postmanFile) return;
+    setIsImporting(true);
+    try {
+      const collectionText = await postmanFile!.text();
+      const collection = JSON.parse(collectionText);
+      const plan = await createExecutionPlan({
+        name: planName.trim(),
+        executionTime: '1m',
+        delayBetweenRequests: '100ms',
+        iterations: 1,
+        rampUpPeriods: undefined,
+        createDefaultRequest: false,
+      });
+
+      const requests = parsePostmanCollection(collection, editedEnvVars);
+      for (const request of requests) {
+        await createTestRequest({
+          executionPlanId: plan.id,
+          endpoint: request.endpoint,
+          httpMethod: request.httpMethod,
+          requestBody: request.requestBody,
+          headers: request.headers,
+        });
+      }
+
+      setPlanName('');
+      setPostmanFile(null);
+      setPostmanEnvFile(null);
+      setEditedEnvVars({});
+      setEnvVars({});
+      setPreviewRequests([]);
+      setShowPreview(false);
+      setImportMode('manual');
+      await listExecutionPlans();
+      setShowForm(false);
+      alert(`Successfully imported ${requests.length} requests from Postman collection!`);
+    } catch (error) {
+      alert('Error importing Postman collection: ' + (error as Error).message);
+      setParsedCollection(null);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      listExecutionPlans();
+    }
+  }, [session?.user?.email]);
+
+  // Update preview requests live when env vars are edited
+  useEffect(() => {
+    if (parsedCollection && showPreview) {
+      const requestsPreview = parsePostmanCollection(parsedCollection, editedEnvVars);
+      setPreviewRequests(requestsPreview);
+    }
+  }, [editedEnvVars, parsedCollection, showPreview]);
 
   const handleDeleteExecutionPlan = async (planId: string) => {
     if (!confirm('Are you sure?')) return;
@@ -435,12 +541,16 @@ export default function ExecutionPlansPage() {
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const lower = String(errorMessage).toLowerCase();
+      // Heuristics to detect CORS/network error in browsers
+      const isCorsError = lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('cors');
       setTestResponse({
         status: 0,
         statusText: 'Error',
         headers: {},
         body: '',
         error: errorMessage,
+        cors: isCorsError,
       });
     } finally {
       setIsTestLoading(false);
@@ -1391,6 +1501,31 @@ export default function ExecutionPlansPage() {
         {(executionPlans.length === 0 || showForm) && (
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 mb-6">
             <h3 className="text-2xl font-semibold text-gray-800 mb-4">Create a New Execution Plan</h3>
+            
+            {/* Import Mode Tabs */}
+            <div className="flex gap-4 mb-6">
+              <button
+                onClick={() => setImportMode('manual')}
+                className={`px-4 py-2 rounded-lg font-medium transition ${
+                  importMode === 'manual' 
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Create Manually
+              </button>
+              <button
+                onClick={() => setImportMode('postman')}
+                className={`px-4 py-2 rounded-lg font-medium transition ${
+                  importMode === 'postman' 
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Import from Postman
+              </button>
+            </div>
+
             <div className="space-y-4">
               <div>
                 <label className="block text-gray-700 font-medium mb-2">Name:</label>
@@ -1402,13 +1537,100 @@ export default function ExecutionPlansPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                 />
               </div>
+
+              {importMode === 'postman' && (
+                <div>
+                  <label className="block text-gray-700 font-medium mb-2">Postman Collection:</label>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={(e) => setPostmanFile(e.target.files?.[0] || null)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Upload a Postman Collection v2.1 JSON file to import all requests
+                  </p>
+                  <div className="mt-3">
+                    <label className="block text-gray-700 font-medium mb-2">Postman Environment (optional):</label>
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={(e) => setPostmanEnvFile(e.target.files?.[0] || null)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                    <div className="text-sm text-gray-500 mt-1">
+                      <p>Optional Postman Environment JSON. These values will be applied to placeholders like <code className="font-mono">{'{{base_url}}'}</code>.</p>
+                      {postmanEnvFile && <p className="text-xs text-gray-400 mt-1">Selected: {postmanEnvFile.name}</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-3">
-                <button onClick={saveExecutionPlan} disabled={!isValidPlanName()} className={`px-6 py-2 rounded-lg transition ${isValidPlanName() ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
-                  Create Plan
+                <button 
+                  onClick={importMode === 'manual' ? saveExecutionPlan : importFromPostman} 
+                  disabled={!isValidPlanName() || (importMode === 'postman' && !postmanFile) || isImporting}
+                  className={`px-6 py-2 rounded-lg transition ${
+                    (isValidPlanName() && (importMode === 'manual' || postmanFile) && !isImporting)
+                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {isImporting ? 'Importing...' : importMode === 'manual' ? 'Create Plan' : 'Import & Preview'}
                 </button>
                 {executionPlans.length > 0 && (
-                  <button onClick={() => setShowForm(false)} className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Cancel</button>
+                  <button onClick={() => {setShowForm(false); setImportMode('manual'); setPostmanFile(null); setPostmanEnvFile(null);}} className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Cancel</button>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Preview modal for Postman import */}
+        {showPreview && (
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-10/12 max-h-5/6 overflow-auto">
+              <h3 className="text-lg font-semibold mb-4">Preview Postman Import</h3>
+              <p className="mb-4 text-sm text-gray-600">Below is a preview of the requests that will be created. Edit environment variables on the right (optional), then confirm import.</p>
+              <div className="flex gap-6">
+                <div className="flex-1 max-h-96 overflow-auto">
+                  {previewRequests.map((r, idx) => (
+                    <div key={idx} className="border rounded p-3 mb-3 bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className={`${getMethodColor(r.httpMethod)} text-white px-2 py-1 rounded text-xs font-semibold`}>{r.httpMethod}</span>
+                          <code className="font-mono text-sm text-gray-800">{r.endpoint}</code>
+                        </div>
+                        <div>
+                          {r.requestBody && <span className="inline-block text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded">body</span>}
+                          {r.headers && <span className="inline-block text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded ml-2">headers</span>}
+                        </div>
+                      </div>
+                      {r.headers && <pre className="mt-2 text-xs text-gray-700 font-mono bg-white p-2 rounded border border-gray-200 break-words">{r.headers}</pre>}
+                      {r.requestBody && <pre className="mt-2 text-xs text-gray-700 font-mono bg-white p-2 rounded border border-gray-200 break-words">{r.requestBody}</pre>}
+                    </div>
+                  ))}
+                </div>
+                <div className="w-96">
+                  <div className="border rounded p-4 bg-white">
+                    <h4 className="text-sm font-medium mb-2">Environment Variables</h4>
+                    <div className="space-y-2 max-h-80 overflow-auto">
+                      {Object.keys(editedEnvVars).length === 0 && <p className="text-xs text-gray-500">No environment variables</p>}
+                      {Object.entries(editedEnvVars).map(([k, v]) => (
+                        <div key={k} className="flex gap-2 items-center">
+                          <div className="w-36 text-xs text-gray-700 font-mono">{k}</div>
+                          <input className="flex-1 text-xs px-2 py-1 border rounded" value={v} onChange={(e) => setEditedEnvVars(prev => ({...prev, [k]: e.target.value}))} />
+                          <button onClick={() => { const copy = {...editedEnvVars}; delete copy[k]; setEditedEnvVars(copy); }} className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-700 rounded">Delete</button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <button onClick={() => { setShowPreview(false); setPreviewRequests([]); setParsedCollection(null); setEditedEnvVars({}); setEnvVars({}); }} className="px-3 py-1 text-sm text-gray-700 bg-gray-100 rounded">Cancel</button>
+                      <button onClick={() => { const key = `newVar${Date.now()}`; setEditedEnvVars(prev => ({...prev, [key]: ''})); }} className="px-3 py-1 text-sm text-gray-700 bg-gray-100 rounded">+ Add variable</button>
+                      <button onClick={confirmImportFromPostman} className="px-3 py-1 text-sm text-white bg-blue-600 rounded">Confirm & Import</button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1455,25 +1677,55 @@ export default function ExecutionPlansPage() {
                 {!isTestLoading && testResponse && (
                   <div className="space-y-6">
                     {/* CORS Error Disclaimer */}
-                    {testResponse.error && testResponse.error.includes('CORS') && (
+                    {testResponse?.cors && (
                       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                         <p className="text-sm font-semibold text-yellow-900 mb-2">⚠️ CORS Error</p>
-                        <p className="text-sm text-yellow-800">
-                          The target API doesn't allow requests from browser clients (CORS policy). This is a security feature of the target API. You can:
+                        <p className="text-sm text-yellow-800 mb-2">
+                          The browser blocked the request due to Cross-Origin Resource Sharing (CORS) policy. The remote API does not allow requests from this web app's origin.
                         </p>
-                        <ul className="text-sm text-yellow-800 list-disc list-inside mt-2 ml-2">
-                          <li>Test this API using the CLI tool (no CORS restrictions)</li>
-                          <li>Ask the API provider to enable CORS for your domain</li>
-                          <li>Use an API that supports CORS (like httpbin.org for testing)</li>
-                        </ul>
+                        <p className="text-sm text-yellow-800 mb-2">
+                          (This error can also be caused by general network problems or an invalid URL; if enabling CORS doesn't resolve it, verify the endpoint and network connectivity.)
+                        </p>
+                        <div className="text-sm text-yellow-800 mb-2">
+                          <p className="font-semibold">What is CORS?</p>
+                          <p>
+                            CORS is a browser security feature that restricts cross-origin HTTP requests initiated from scripts. It prevents web pages from making requests to a different domain than the one that served the web page unless the API allows it.
+                          </p>
+                        </div>
+                        <div className="text-sm text-yellow-800">
+                          <p className="font-semibold">How to fix</p>
+                          <ul className="list-disc list-inside ml-4 mt-2">
+                            <li>
+                              Enable CORS on the remote API by adding response headers like:
+                              <div className="font-mono text-xs bg-gray-100 p-2 rounded mt-2">Access-Control-Allow-Origin: *<br/>Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS<br/>Access-Control-Allow-Headers: Content-Type, Authorization</div>
+                            </li>
+                            <li>Or run the request from a server/CLI (no CORS) — use the CLI to test as an alternative.</li>
+                            <li>If you don't control the API, contact the API provider and request CORS support for your domain.</li>
+                          </ul>
+                        </div>
+                        {testResponse.status > 0 && (
+                          <div className="mt-3 text-xs text-gray-600">
+                            <p>HTTP Status: <span className="font-semibold">{testResponse.status}</span> {testResponse.statusText}</p>
+                          </div>
+                        )}
                       </div>
                     )}
 
                     {/* Generic Error */}
-                    {testResponse.error && !testResponse.error.includes('CORS') && (
+                    {testResponse.error && !testResponse.cors && (
                       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                        <p className="text-sm font-semibold text-red-900">Error</p>
-                        <p className="text-sm text-red-800 font-mono mt-2 break-all">{testResponse.error}</p>
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-red-900">Error</p>
+                            <p className="text-sm text-red-800 font-mono mt-2 break-all">{testResponse.error}</p>
+                          </div>
+                          {testResponse.status > 0 && (
+                            <div className="text-right">
+                              <p className="text-xs text-gray-500">HTTP Status</p>
+                              <p className="text-lg font-semibold text-gray-800">{testResponse.status}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -1531,7 +1783,7 @@ export default function ExecutionPlansPage() {
                 {!isTestLoading && !testResponse && (
                   <div className="text-center py-8">
                     <button 
-                      onClick={() => handleTestRequest(testingRequest)}
+                      onClick={() => testingRequest && handleTestRequest(testingRequest)}
                       className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
                     >
                       Send Request
@@ -1544,7 +1796,7 @@ export default function ExecutionPlansPage() {
               <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-6 flex justify-between items-center">
                 {!isTestLoading && testResponse && (
                   <button 
-                    onClick={() => handleTestRequest(testingRequest)}
+                    onClick={() => testingRequest && handleTestRequest(testingRequest)}
                     className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 font-medium"
                   >
                     Try Again
