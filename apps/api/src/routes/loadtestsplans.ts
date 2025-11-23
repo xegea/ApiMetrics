@@ -9,6 +9,7 @@ interface CreateExecutionPlanBody {
   delayBetweenRequests?: string;
   iterations?: number;
   rampUpPeriods?: string;
+  createDefaultRequest?: boolean;
 }
 
 interface UpdateExecutionPlanBody {
@@ -93,7 +94,7 @@ async function createExecutionPlan(
       email: user.email ?? `unknown+${user.userId}@example.com`,
     });
 
-    // Create the execution plan with default values
+  // Create the execution plan with default values
     const executionPlan = await (prisma as any).executionPlan.create({
       data: {
         tenantId: ensured.tenantId,
@@ -105,20 +106,22 @@ async function createExecutionPlan(
         rampUpPeriods: rampUpPeriods || null,
       },
     });
-
-    // Create a default GET request for this execution plan
-    const defaultRequest = await (prisma as any).testRequest.create({
-      data: {
-        tenantId: ensured.tenantId,
-        userId: user.userId,
-        executionPlanId: executionPlan.id,
-        orderId: 0,
-        endpoint: 'https://api.example.com/health',
-        httpMethod: 'GET',
-        requestBody: null,
-        headers: null,
-      },
-    });
+    // Create a default GET request for this execution plan unless the client explicitly disables this
+    let defaultRequest: any = null;
+    if (request.body?.createDefaultRequest !== false) {
+      defaultRequest = await (prisma as any).testRequest.create({
+        data: {
+          tenantId: ensured.tenantId,
+          userId: user.userId,
+          executionPlanId: executionPlan.id,
+          orderId: 0,
+          endpoint: 'https://api.example.com/health',
+          httpMethod: 'GET',
+          requestBody: null,
+          headers: null,
+        },
+      });
+    }
 
     return reply.code(201).send({
       id: executionPlan.id,
@@ -129,14 +132,14 @@ async function createExecutionPlan(
       iterations: executionPlan.iterations,
       rampUpPeriods: executionPlan.rampUpPeriods,
       createdAt: executionPlan.createdAt,
-      testRequests: [{
+      testRequests: defaultRequest ? [{
         id: defaultRequest.id,
         endpoint: defaultRequest.endpoint,
         httpMethod: defaultRequest.httpMethod,
         requestBody: defaultRequest.requestBody,
         headers: defaultRequest.headers,
         createdAt: defaultRequest.createdAt,
-      }],
+      }] : [],
     });
   } catch (error: any) {
     // Log detailed prisma error info if available
